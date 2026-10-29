@@ -1,0 +1,12 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {filterProblems,choose,problemUrl} from './core.mjs';
+const problems=[{contestId:1,index:'A',rating:800,tags:['dp']},{contestId:2,index:'B',rating:1600,tags:['dp','math']},{contestId:3,index:'C',rating:2000,tags:['math']},{contestId:4,index:'D',tags:['dp']}];
+test('rating interval includes endpoints and excludes unrated',()=>assert.deepEqual(filterProblems(problems,{min:800,max:1600}).map(p=>p.index),['A','B']));
+test('all selected tags must match',()=>assert.deepEqual(filterProblems(problems,{tags:['dp','math']}).map(p=>p.index),['B']));
+test('any selected tag may match',()=>assert.equal(filterProblems(problems,{tags:['dp','math'],mode:'any'}).length,3));
+test('history exclusion and repeat override',()=>{assert.equal(filterProblems(problems,{},['1/A']).length,2);assert.equal(filterProblems(problems,{noRepeat:false},['1/A']).length,3);});
+test('invalid rating interval is rejected',()=>assert.throws(()=>filterProblems(problems,{min:2000,max:800})));
+test('empty pool does not produce an invalid URL',()=>assert.equal(choose([]),null));
+test('draw covers first and last candidate',()=>{assert.equal(choose(problems,()=>0),problems[0]);assert.equal(choose(problems,()=>0.99999),problems[3]);});
+test('problem URL uses contest and index',()=>assert.equal(problemUrl(problems[1]),'https://codeforces.com/problemset/problem/2/B'));
