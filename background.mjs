@@ -1,5 +1,6 @@
 import {key, choose, problemUrl} from './core.mjs';
 import {candidates, summarize, generateTraining} from './model.mjs';
+import {readSessions,markViewed} from './sessions.mjs';
 // One queue across all tabs: API requests obey CF's two-second interval,
 // storage mutations cannot overwrite another tab's draw or account settings.
 let queue=Promise.resolve();
@@ -46,6 +47,14 @@ async function record(problems,extra={}){
   await chrome.storage.local.set({history,drawLog,...extra});
 }
 async function handleMessage(m){
+  if(m.type==='sessions'){
+    const stored=await chrome.storage.local.get(['trainings','training']);const trainings=readSessions(stored);
+    if(!stored.trainings)await chrome.storage.local.set({trainings});return trainings;
+  }
+  if(m.type==='viewed'){
+    const stored=await chrome.storage.local.get(['trainings','training']);
+    const trainings=markViewed(readSessions(stored),m.id,m.key);await chrome.storage.local.set({trainings});return trainings.find(s=>String(s.id)===String(m.id));
+  }
   if(m.type==='database')return database(m.force);
   if(m.type==='sync')return sync(m.handle,m.force);
   if(m.type==='recent'){
@@ -70,12 +79,17 @@ async function handleMessage(m){
   if(m.type==='draw'||m.type==='training'){
     const {problems}=await database();
     const s=await chrome.storage.local.get(['settings','history','account']);
-    const settings=s.settings||{min:800,max:2000,tags:[],noRepeat:true,exclude:'ac'};
+    const settings={min:800,max:2000,tags:[],noRepeat:true,exclude:'ac',...s.settings};
+    if(m.type==='training'&&m.options){
+      if(['none','ac','tried'].includes(m.options.exclude))settings.exclude=m.options.exclude;
+      if(typeof m.options.noRepeat==='boolean')settings.noRepeat=m.options.noRepeat;
+    }
     if(settings.exclude!=='none'&&s.account&&Date.now()-s.account.time>86400000)throw new Error('做题记录已超过一天未全量同步，请先同步后再抽题。');
     if(m.type==='training'){
       const picked=generateTraining(problems,m.groups,settings,s.history||[],s.account);
-      const training={id:Date.now(),name:String(m.name||'自组训练').slice(0,80),created:Date.now(),groups:m.groups,problems:picked};
-      await record(picked,{training});return training;
+      const training={id:crypto.randomUUID(),name:String(m.name||'自组训练').slice(0,80),created:Date.now(),groups:m.groups,problems:picked,viewed:{}};
+      const stored=await chrome.storage.local.get(['trainings','training']);
+      await record(picked,{trainings:[training,...readSessions(stored)]});return training;
     }
     const p=choose(candidates(problems,settings,s.history||[],s.account).filter(p=>key(p)!==m.omitKey));if(!p)throw new Error('没有符合条件的题目，请调整筛选条件或去重设置。');
     await record([p]);

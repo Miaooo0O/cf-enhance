@@ -1,17 +1,17 @@
 import { key, problemUrl } from './core.mjs';
 import {request} from './client.mjs';
 import {statusOf,candidates} from './model.mjs';
+import {tagNames as names,displayTag,normalizeTag} from './tags.mjs';
 export async function mountPicker(root=document,options={}) {
 const $ = id => root.querySelector('#'+id);
-const names = {dp:'动态规划',graphs:'图论',math:'数学',greedy:'贪心','data structures':'数据结构','binary search':'二分',trees:'树',strings:'字符串','number theory':'数论',geometry:'计算几何',implementation:'模拟',combinatorics:'组合数学',constructive:'构造','constructive algorithms':'构造',dfs:'深搜','dfs and similar':'搜索',flows:'网络流',games:'博弈',sortings:'排序',bitmasks:'位运算','two pointers':'双指针','divide and conquer':'分治',dsu:'并查集','shortest paths':'最短路'};
-let problems = [], selected = new Set(), history = [], drawLog=[], historyLimit=30, busy = false, cache = null, account=null;
+let problems = [], selected = new Set(), history = [], drawLog=[], historyLimit=30, busy = false, cache = null, account=null, chinese=false;
 const stateNames={ac:'已通过',tried:'尝试中',new:'未提交'};
 function renderHistory(){
   const query=$('historySearch').value.trim().toLowerCase();
   const lookup=new Map(problems.map(p=>[key(p),p]));
   const entries=drawLog.map(entry=>({...lookup.get(entry.key),...entry})).filter(entry=>{
     const state=account?statusOf(account.states,entry.key):'unknown';
-    return (entry.key+' '+(entry.name||'')).toLowerCase().includes(query)&&($('historyState').value==='all'||state===$('historyState').value)&&(!$('historyMin').value||entry.rating>=Number($('historyMin').value))&&(!$('historyMax').value||entry.rating<=Number($('historyMax').value))&&(!$('historyTag').value||(entry.tags||[]).some(t=>t.toLowerCase().includes($('historyTag').value.toLowerCase())))&&(!$('historyDate').value||(entry.at&&new Date(entry.at).toLocaleDateString('sv-SE')===$('historyDate').value));
+    return (entry.key+' '+(entry.name||'')).toLowerCase().includes(query)&&($('historyState').value==='all'||state===$('historyState').value)&&(!$('historyMin').value||entry.rating>=Number($('historyMin').value))&&(!$('historyMax').value||entry.rating<=Number($('historyMax').value))&&(!$('historyTag').value||(entry.tags||[]).some(t=>t.toLowerCase().includes(normalizeTag($('historyTag').value))))&&(!$('historyDate').value||(entry.at&&new Date(entry.at).toLocaleDateString('sv-SE')===$('historyDate').value));
   });
   $('historyCount').textContent=drawLog.length;$('historyList').replaceChildren();
   for(const entry of entries.slice(0,historyLimit)){
@@ -40,7 +40,7 @@ function render(){
   $('tags').replaceChildren();
   [...new Set(problems.flatMap(p=>p.tags))].sort().filter(t=>(t+' '+(names[t]||'')).toLowerCase().includes(query)).forEach(t=>{
     const button=document.createElement('button');button.type='button';button.className='tag';button.textContent=t;button.title=names[t]||t;button.setAttribute('aria-pressed',String(selected.has(t)));
-    button.onclick=()=>{selected.has(t)?selected.delete(t):selected.add(t);render();save().catch(showError);};$('tags').append(button);
+    button.textContent=displayTag(t,chinese);button.onclick=()=>{selected.has(t)?selected.delete(t):selected.add(t);render();save().catch(showError);};$('tags').append(button);
   });
   $('tagCount').textContent=selected.size?`已选 ${selected.size} 个`:'不限标签';updateCount();
 }
@@ -75,7 +75,7 @@ $('filters').onsubmit=async event=>{
 };
 async function init(){
   setBusy(true);
-  try{const stored=await chrome.storage.local.get(['settings','cache','history','drawLog','account']);cache=stored.cache;history=stored.history||[];account=stored.account;$('handle').value=account?.handle||'';accountInfo();
+  try{const stored=await chrome.storage.local.get(['settings','cache','history','drawLog','account','preferences']);chinese=!!stored.preferences?.chinese;cache=stored.cache;history=stored.history||[];account=stored.account;$('handle').value=account?.handle||'';accountInfo();
     drawLog=stored.drawLog||[...history].reverse().map(key=>({key,at:null}));
     renderHistory();
     if(stored.settings){const s=stored.settings;$('min').value=s.min;$('max').value=s.max;$('mode').value=s.mode;selected=new Set(s.tags||[]);$('noRepeat').checked=s.noRepeat;$('exclude').value=s.exclude||'ac';}
@@ -87,7 +87,7 @@ if(options.view==='history'){
   container.classList.add('historyView');$('historyPanel').open=true;root.querySelector('h1').textContent='刷题记录';
 }
 if(options.embedded)container.classList.add('embedded');
-const onStorage=(changes,area)=>{if(area!=='local'||!['account','drawLog','history'].some(k=>changes[k]))return;if(changes.account){account=changes.account.newValue;accountInfo();}if(changes.drawLog)drawLog=changes.drawLog.newValue||[];if(changes.history)history=changes.history.newValue||[];renderHistory();updateCount();};
+const onStorage=(changes,area)=>{if(area!=='local'||!['account','drawLog','history','preferences'].some(k=>changes[k]))return;if(changes.preferences){chinese=!!changes.preferences.newValue?.chinese;render();}if(changes.account){account=changes.account.newValue;accountInfo();}if(changes.drawLog)drawLog=changes.drawLog.newValue||[];if(changes.history)history=changes.history.newValue||[];renderHistory();updateCount();};
 chrome.storage.onChanged.addListener(onStorage);
 await init();
 return ()=>chrome.storage.onChanged.removeListener(onStorage);

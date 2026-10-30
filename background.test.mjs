@@ -38,3 +38,11 @@ test('recent requests share cache, preserve old AC and cannot update a different
   const h=await harness({account:{handle:'sample',complete:true,states:{'10/A':{solved:true,attempts:4}},time:1}},()=>[{id:2,problem:problem('A'),verdict:'WRONG_ANSWER'}]);
   try{await h.send({type:'recent',handle:'sample'});await h.send({type:'recent',handle:'Sample'});assert.equal(h.calls.length,1);assert(h.state.account.states['10/A'].solved);assert.equal(h.state.account.states['10/A'].attempts,4);const previous=structuredClone(h.state.account);await h.send({type:'recent',handle:'someone'});assert.deepEqual(h.state.account,previous);}finally{h.restore();}
 });
+test('creating sessions migrates legacy training, keeps earlier sessions and uses independent IDs',async()=>{
+  const legacy={id:99,name:'legacy',created:1,problems:[problem('A')]};
+  const h=await harness({cache:{time:10000000,problems:[problem('A'),problem('B')]},settings:{min:800,max:2000,exclude:'none',noRepeat:false},training:legacy},()=>[]);
+  try{const message={type:'training',name:'scene',groups:[{min:800,max:2000,count:1}],options:{exclude:'none',noRepeat:false}};const first=await h.send(message),second=await h.send(message);assert(first.ok&&second.ok);assert.notEqual(first.data.id,second.data.id);assert.equal(h.state.trainings.length,3);assert.equal(h.state.trainings[2].id,'99');
+    const viewed=await h.send({type:'viewed',id:first.data.id,key:`10/${first.data.problems[0].index}`});assert(viewed.ok);assert.equal(Object.keys(h.state.trainings[1].viewed).length,1);assert.deepEqual(h.state.trainings[0].viewed,{});
+    const old=structuredClone(h.state.trainings);const invalid=await h.send({type:'viewed',id:first.data.id,key:'999/Z'});assert.equal(invalid.ok,false);assert.deepEqual(h.state.trainings,old);
+  }finally{h.restore();}
+});

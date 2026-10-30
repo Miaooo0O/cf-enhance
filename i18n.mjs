@@ -1,3 +1,4 @@
+import {tagNames} from './tags.mjs';
 // Exact UI phrases only. Never translate problem statements, source code,
 // sample data, user names, problem names, editorial text or arbitrary prose.
 const words={
@@ -14,11 +15,25 @@ const words={
   'Before contest':'比赛开始前',Finished:'已结束',Practice:'练习','Contest is running':'比赛进行中',
   'Friends standings':'好友排名','Common standings':'总排行榜','Register now':'立即报名','Registration':'报名',
   'Participant':'参赛者','Participants':'参赛者','When':'提交时间','Who':'用户','Verdict':'结果','Time':'耗时','Memory':'内存',
-  'In English':'英语','In Russian':'俄语','Submit solution':'提交代码','View':'查看','Save':'保存','Cancel':'取消','Close':'关闭','Next':'下一页','Previous':'上一页'
+  'In English':'英语','In Russian':'俄语','Submit solution':'提交代码','View':'查看','Save':'保存','Cancel':'取消','Close':'关闭','Next':'下一页','Previous':'上一页',
+  Main:'主站',Friends:'好友',Favourites:'收藏',Favorites:'收藏',Tutorial:'题解',Tutorials:'题解',Announcement:'公告',Announcements:'公告','Contest status':'比赛状态','No tag edit access':'无标签编辑权限','Tag edit access':'编辑标签',
+  'Show unofficial':'显示非正式参赛者','Show only friends':'只看好友','Hide':'隐藏','Show':'显示','All':'全部','All problems':'全部题目',
+  'Accepted':'通过','Wrong answer':'答案错误','Time limit exceeded':'超过时间限制','Memory limit exceeded':'超过内存限制','Runtime error':'运行错误','Compilation error':'编译错误','In queue':'排队中','Running':'评测中',
+  'Problem name':'题目名称','Contest name':'比赛名称','Start time':'开始时间','Duration':'时长','Participants count':'参赛人数','Registration completed':'已报名','Registration is running':'报名中','My participation':'我的参赛',
+  'Statistics':'统计','Results':'结果','Final standings':'最终排名','Find':'查找','Clear':'清空','Upload':'上传','Choose':'选择','Optional':'可选','Required':'必填','Refresh':'刷新','Last update':'最近更新',
+  'Heaps, binary search trees, segment trees, hash tables, etc':'堆、二叉搜索树、线段树、哈希表等',
+  'Mathematics including integration, differential equations, etc':'数学，包括积分、微分方程等',
+  'Geometry, computational geometry':'几何与计算几何','Graphs':'图论','Greedy algorithms':'贪心算法',
+  'Number theory: Euler function, GCD, divisibility, etc':'数论：欧拉函数、最大公约数、整除等',
+  'Games, Sprague–Grundy theorem':'博弈与 SG 定理','Implementation problems, programming technics, simulation':'实现题、编程技巧与模拟',
+  'Prefix- and Z-functions, suffix structures, Knuth–Morris–Pratt algorithm, etc':'前缀函数、Z 函数、后缀结构、KMP 算法等',
+  'Matrix multiplication, determinant, Cramer\'s rule, systems of linear equations':'矩阵乘法、行列式、克拉默法则与线性方程组',
+  'Participants solved the problem':'通过该题的人数','With information transfer between solution runs':'多次程序运行之间传递信息',
+  ...tagNames
 };
 const dictionary=new Map(Object.entries(words).map(([a,b])=>[a.toLowerCase(),b]));
 const protectedSelector='.problem-statement,.problemindexholder,pre,code,textarea,script,style,.MathJax,.MathJax_Display,#cfe-root,#cfe-ac,[contenteditable]';
-const uiSelector='.menu-box,.second-level-menu,#sidebar .caption,.roundbox .caption,.contest-state-phase,table.problems tr:first-child,.datatable thead,form[action*="/submit"],.submit-form,button,input[type="submit"],input[type="button"],.input-output-copier,label,.pagination';
+const uiSelector='.menu-box,.second-level-menu,#header .lang-chooser,#sidebar .caption,#sidebar .roundbox:has(.tag-box),.roundbox .caption,.contest-state-phase,table.problems tr:first-child,.datatable thead,.datatable tr:first-child,form[action*="/submit"],.submit-form,button,input[type="submit"],input[type="button"],.input-output-copier,label,.pagination,.tag-box,table.problems a.notice,#sidebar .bottom-links,.filter-box';
 const routes=/^\/(?:$|top\/?$|catalog\/?$|contests\/?$|gyms\/?$|problemset(?:\/(?:submit|status|standings|customtest))?\/?$|groups\/my\/?$|ratings\/?$|edu\/courses\/?$|apiHelp\/?$|calendar\/?$|help\/?$|contest\/\d+\/(?:submit|my|status|standings|customtest|problems)\/?$)/;
 function translated(text){
   // Preserve surrounding whitespace, arrows and punctuation.
@@ -42,7 +57,7 @@ export function createTranslator(doc){
     walk(element);
     for(const n of [element,...element.querySelectorAll('[title],[aria-label],input[type="submit"],input[type="button"]')]){
       if(n.closest(protectedSelector))continue;
-      for(const attr of ['title','aria-label'])update(n,attr);
+      for(const attr of ['title','aria-label','placeholder'])update(n,attr);
       // A named submit value may be part of CF's form protocol.
       if(n.matches('input[type="submit"],input[type="button"]')&&!n.hasAttribute('name'))update(n,'value');
     }

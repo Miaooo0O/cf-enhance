@@ -1,12 +1,12 @@
 {
   "manifest_version": 3,
   "name": "CF Enhance · Codeforces 增强",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "融入 CF 原网页的随机跳题、AC 状态、刷题记录、盲刷显示与混合自组训练工具。",
   "permissions": ["storage"],
   "host_permissions": ["https://codeforces.com/*"],
   "background": { "service_worker": "background.mjs", "type": "module" },
   "action": { "default_popup": "popup.html", "default_title": "CF Enhance · 随机跳题与刷题记录" },
   "content_scripts": [{ "matches": ["https://codeforces.com/*"], "js": ["homepage.js", "submit-helper.js"], "css": ["enhance.css"], "run_at": "document_idle" }],
-  "web_accessible_resources": [{ "resources": ["popup.html", "popup.css", "popup.mjs", "core.mjs", "client.mjs", "model.mjs", "enhance.mjs", "i18n.mjs"], "matches": ["https://codeforces.com/*"] }]
+  "web_accessible_resources": [{ "resources": ["popup.html", "popup.css", "popup.mjs", "core.mjs", "client.mjs", "model.mjs", "enhance.mjs", "i18n.mjs", "tags.mjs", "training.mjs", "sessions.mjs"], "matches": ["https://codeforces.com/*"] }]
 }

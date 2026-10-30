@@ -1,8 +1,12 @@
 {
   "name": "cf-enhance",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "type": "module",
-  "scripts": { "test": "node --test core.test.mjs model.test.mjs background.test.mjs ui.test.mjs" },
-  "devDependencies": { "linkedom": "0.18.14" }
+  "scripts": {
+    "test": "node --test core.test.mjs model.test.mjs background.test.mjs ui.test.mjs"
+  },
+  "devDependencies": {
+    "linkedom": "0.18.14"
+  }
 }
