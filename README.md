@@ -4,7 +4,7 @@
 
 ## 安装或更新
 
-1. 下载 Release 中的 `cf-random-picker-2.1.1.zip`，解压到固定目录。
+1. 下载 Release 中的 `cf-random-picker-2.1.2.zip`，解压到固定目录。
 2. Chrome 打开 `chrome://extensions/`，开启开发者模式，加载包含 `manifest.json` 的文件夹。
 3. 已安装用户将文件覆盖到原目录，点击扩展的重新加载，再刷新 CF 页面。沿用原目录和 Chrome 配置可保留历史记录。
 
