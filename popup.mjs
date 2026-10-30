@@ -1,5 +1,5 @@
 import { key, problemUrl } from './core.mjs';
-import {request} from './client.mjs';
+import {request,getLocal,listenStorage} from './client.mjs';
 import {statusOf,candidates} from './model.mjs';
 import {tagNames as names,displayTag,normalizeTag} from './tags.mjs';
 export async function mountPicker(root=document,options={}) {
@@ -68,14 +68,14 @@ $('filters').onsubmit=async event=>{
   try{
     if(settings().exclude!=='none'&&account&&$('handle').value.trim().toLowerCase()!==account.handle.toLowerCase())throw new Error('handle 已更改，请先同步新账号的记录。');
     setBusy(true);await save();const problem=await request('draw',{open:true});
-    const stored=await chrome.storage.local.get(['history','drawLog']);history=stored.history||[];drawLog=stored.drawLog||[];renderHistory();
+    const stored=await getLocal(['history','drawLog']);history=stored.history||[];drawLog=stored.drawLog||[];renderHistory();
     $('last').textContent=`${problem.contestId}${problem.index} · ${problem.name} · ${problem.rating}`;$('last').href=problemUrl(problem);$('last').hidden=false;
     $('status').textContent='已在新标签页打开。点击下方题目可前往。';
   }catch(e){showError(e);}finally{setBusy(false);}
 };
 async function init(){
   setBusy(true);
-  try{const stored=await chrome.storage.local.get(['settings','cache','history','drawLog','account','preferences']);chinese=!!stored.preferences?.chinese;cache=stored.cache;history=stored.history||[];account=stored.account;$('handle').value=account?.handle||'';accountInfo();
+  try{const stored=await getLocal(['settings','cache','history','drawLog','account','preferences']);chinese=!!stored.preferences?.chinese;cache=stored.cache;history=stored.history||[];account=stored.account;$('handle').value=account?.handle||'';accountInfo();
     drawLog=stored.drawLog||[...history].reverse().map(key=>({key,at:null}));
     renderHistory();
     if(stored.settings){const s=stored.settings;$('min').value=s.min;$('max').value=s.max;$('mode').value=s.mode;selected=new Set(s.tags||[]);$('noRepeat').checked=s.noRepeat;$('exclude').value=s.exclude||'ac';}
@@ -88,7 +88,7 @@ if(options.view==='history'){
 }
 if(options.embedded)container.classList.add('embedded');
 const onStorage=(changes,area)=>{if(area!=='local'||!['account','drawLog','history','preferences'].some(k=>changes[k]))return;if(changes.preferences){chinese=!!changes.preferences.newValue?.chinese;render();}if(changes.account){account=changes.account.newValue;accountInfo();}if(changes.drawLog)drawLog=changes.drawLog.newValue||[];if(changes.history)history=changes.history.newValue||[];renderHistory();updateCount();};
-chrome.storage.onChanged.addListener(onStorage);
+const unlisten=listenStorage(onStorage);
 await init();
-return ()=>chrome.storage.onChanged.removeListener(onStorage);
+return unlisten;
 }

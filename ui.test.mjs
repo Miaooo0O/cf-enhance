@@ -9,12 +9,13 @@ import {createTranslator} from './i18n.mjs';
 import {readSessions,markViewed} from './sessions.mjs';
 import {mountTrainingPage,mountSessionContext} from './training.mjs';
 import {normalizeTag} from './tags.mjs';
+import {request,getLocal,setLocal} from './client.mjs';
 const popup=await fs.readFile(new URL('./popup.html',import.meta.url),'utf8');
 const css=await fs.readFile(new URL('./popup.css',import.meta.url),'utf8');
 const sample=[{contestId:10,index:'A',name:'Alpha',rating:1400,tags:['dp']},{contestId:10,index:'B',name:'Beta',rating:1600,tags:['math']}];
 const flush=async()=>{for(let i=0;i<6;i++)await new Promise(setImmediate);};
 function environment(html,path,state={}){
-  const {window,document}=parseHTML(html);const listeners=new Set(),requests=[];
+  const {window,document}=parseHTML(html);const listeners=new Set(),requests=[],timers=[],cleared=new Set();
   const originals=new Map();function install(k,v){originals.set(k,Object.getOwnPropertyDescriptor(globalThis,k));Object.defineProperty(globalThis,k,{value:v,writable:true,configurable:true});}
   // Linkedom models option markup but does not implement the select.value setter.
   Object.defineProperty(window.HTMLSelectElement.prototype,'value',{configurable:true,get(){return [...this.options].find(o=>o.hasAttribute('selected'))?.value||this.options[0]?.value||'';},set(value){for(const o of this.options)o.toggleAttribute('selected',o.value===String(value));}});
@@ -22,9 +23,9 @@ function environment(html,path,state={}){
   const storage={get:async keys=>Object.fromEntries((typeof keys==='string'?[keys]:keys).filter(k=>k in state).map(k=>[k,structuredClone(state[k])])),set};
   install('document',document);install('window',window);install('Event',window.Event);install('MutationObserver',window.MutationObserver);install('DOMParser',DOMParser);
   install('location',{pathname:new URL(path,'https://codeforces.com').pathname,href:'https://codeforces.com'+path,assign:url=>requests.push({type:'navigate',url})});
-  install('matchMedia',()=>({matches:true}));install('setInterval',()=>1);install('clearInterval',()=>{});
+  install('matchMedia',()=>({matches:true}));install('setInterval',fn=>{timers.push(fn);return timers.length;});install('clearInterval',id=>cleared.add(id));
   install('fetch',async url=>({ok:true,text:async()=>url.endsWith('.css')?css:popup}));
-  install('chrome',{storage:{local:storage,onChanged:{addListener:f=>listeners.add(f),removeListener:f=>listeners.delete(f)}},runtime:{getURL:file=>'chrome-extension://test/'+file,sendMessage:async m=>{
+  install('chrome',{storage:{local:storage,onChanged:{addListener:f=>listeners.add(f),removeListener:f=>listeners.delete(f)}},runtime:{id:'test-extension',getURL:file=>'chrome-extension://test/'+file,sendMessage:async m=>{
     requests.push(m);try{let data;
       if(m.type==='database')data={problems:sample,time:Date.now()};
       if(m.type==='save'){await set({[m.field]:m.value});data=true;}
@@ -35,7 +36,7 @@ function environment(html,path,state={}){
       return {ok:true,data};
     }catch(e){return {ok:false,error:e.message};}
   }}});
-  return {document,window,state,requests,set,restore(){for(const [k,d]of originals){if(d)Object.defineProperty(globalThis,k,d);else delete globalThis[k];}}};
+  return {document,window,state,requests,set,timers,cleared,listeners,restore(){for(const [k,d]of originals){if(d)Object.defineProperty(globalThis,k,d);else delete globalThis[k];}}};
 }
 test('history upgrades old key-only records, filters statuses/tags/rating, and reset keeps the log',async()=>{
   const e=environment(popup,'/problemset',{history:['10/A','10/B'],account:{handle:'sample',time:Date.now(),complete:true,states:{'10/A':{solved:true}}}});
@@ -106,4 +107,15 @@ test('Chinese and bilingual tag inputs resolve to actual CF keys',()=>{
 test('translation handles newly inserted UI and does not overwrite subsequent site changes when disabled',()=>{
   const {document}=parseHTML('<html><body><div class="menu-box"><a href="/help">Help</a></div><div class="problem-statement">Help</div></body></html>');
   const translator=createTranslator(document);translator.setEnabled(true);const menu=document.querySelector('.menu-box');const b=document.createElement('button');b.textContent='Submit';menu.append(b);translator.scan(b);assert.equal(b.textContent,'提交');b.textContent='Changed by site';translator.setEnabled(false);assert.equal(b.textContent,'Changed by site');assert.equal(document.querySelector('a').textContent,'Help');assert.equal(document.querySelector('.problem-statement').textContent,'Help');
+});
+test('a synchronous storage exception after extension reload stops polling without an unhandled rejection',async()=>{
+ const e=environment('<html><body><div id="pageContent"></div></body></html>','/problemset/problem/10/A',{account:{handle:'sample',complete:true,states:{}}});
+ try{await mount();await flush();let gets=0;chrome.storage.local.get=()=>{gets++;throw new Error('Extension context invalidated.');};e.timers[0]();await flush();assert(e.document.getElementById('cfe-notice').textContent.includes('刷新'));assert(e.cleared.has(1));assert.equal(e.listeners.size,0);assert(e.document.querySelector('#cfe-root button').disabled);e.timers[0]();await flush();assert.equal(gets,1);}finally{e.restore();}
+});
+test('an asynchronously invalidated message channel is caught and stops subsequent checks',async()=>{
+ const e=environment('<html><body><div id="pageContent"></div></body></html>','/problemset/problem/10/A',{account:{handle:'sample',complete:true,states:{}}});
+ try{await mount();await flush();let sends=0;chrome.runtime.sendMessage=async()=>{sends++;throw new Error('Extension context invalidated.');};e.timers[0]();await flush();e.timers[0]();await flush();assert.equal(sends,1);assert(e.cleared.has(1));assert(e.document.getElementById('cfe-notice').textContent.includes('刷新'));}finally{e.restore();}
+});
+test('missing runtime identity makes all shared storage and messaging APIs reject with a refresh instruction',async()=>{
+ const e=environment(popup,'/problemset');try{chrome.runtime.id=undefined;for(const action of [()=>request('recent'),()=>getLocal('account'),()=>setLocal({history:[]})])await assert.rejects(action(),e=>e.code==='CFE_CONTEXT_INVALIDATED'&&e.message.includes('刷新'));}finally{e.restore();}
 });

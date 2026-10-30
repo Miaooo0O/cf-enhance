@@ -1,4 +1,4 @@
-import {request} from './client.mjs';
+import {request,getLocal,listenStorage} from './client.mjs';
 import {key} from './core.mjs';
 import {libraryUrl,sessionUrl,sessionProblemUrl,sessionProgress,sessionState,alias} from './sessions.mjs';
 import {tagNames,displayTag,normalizeTag} from './tags.mjs';
@@ -19,7 +19,7 @@ export async function mountTrainingPage({content,root}){
   const view=el('section',{id:'cfe-training-page'});content.replaceChildren(root,view);
   const sidebar=document.querySelector('#sidebar');if(sidebar)sidebar.hidden=true;
   const params=new URL(location.href).searchParams,selectedId=params.get('session');
-  let sessions=await request('sessions');const stored=await chrome.storage.local.get(['account','preferences','settings']);let account=stored.account,chinese=!!stored.preferences?.chinese;
+  let sessions=await request('sessions');const stored=await getLocal(['account','preferences','settings']);let account=stored.account,chinese=!!stored.preferences?.chinese;
   let selected=sessions.find(s=>String(s.id)===selectedId);
   const nav=el('div',{class:'cfe-session-nav'});nav.append(link('题单 / 全部场次',libraryUrl()));if(selected)nav.append(el('span',{},' » '+selected.name));view.append(nav);
   const heading=el('h1',{},selected?.name||'我的训练场次');view.append(heading);
@@ -59,7 +59,7 @@ export async function mountTrainingPage({content,root}){
       }catch(e){info.textContent=e.message;generate.disabled=false;}
     });actions.append(button('添加一组',()=>{if(groups.children.length<12)group();}),generate);builder.append(actions);
     // Refresh suggestion labels without replacing an in-progress form.
-    const onPreferences=(changes,area)=>{if(area==='local'&&changes.preferences){chinese=!!changes.preferences.newValue?.chinese;renderSuggestions();}};chrome.storage.onChanged.addListener(onPreferences);window.addEventListener('pagehide',()=>chrome.storage.onChanged.removeListener(onPreferences),{once:true});
+    const onPreferences=(changes,area)=>{if(area==='local'&&changes.preferences){chinese=!!changes.preferences.newValue?.chinese;renderSuggestions();}};const unlistenPreferences=listenStorage(onPreferences);window.addEventListener('pagehide',unlistenPreferences,{once:true});
   }
   view.append(output);
   function render(){
@@ -80,16 +80,16 @@ export async function mountTrainingPage({content,root}){
     }
   }
   render();
-  const onChange=(changes,area)=>{if(area!=='local')return;if(changes.account)account=changes.account.newValue;if(changes.trainings)sessions=changes.trainings.newValue||[];if(changes.preferences)chinese=!!changes.preferences.newValue?.chinese;if(changes.account||changes.trainings||changes.preferences)render();};chrome.storage.onChanged.addListener(onChange);window.addEventListener('pagehide',()=>chrome.storage.onChanged.removeListener(onChange),{once:true});
+  const onChange=(changes,area)=>{if(area!=='local')return;if(changes.account)account=changes.account.newValue;if(changes.trainings)sessions=changes.trainings.newValue||[];if(changes.preferences)chinese=!!changes.preferences.newValue?.chinese;if(changes.account||changes.trainings||changes.preferences)render();};const unlisten=listenStorage(onChange);window.addEventListener('pagehide',unlisten,{once:true});
   return true;
 }
 
 export async function mountSessionContext(problem,id){
   const sessions=await request('sessions'),session=sessions.find(s=>String(s.id)===String(id));
   if(!session||!session.problems.some(p=>key(p)===key(problem)))return;
-  let current=await request('viewed',{id,key:key(problem)}),account=(await chrome.storage.local.get('account')).account;
+  let current=await request('viewed',{id,key:key(problem)}),account=(await getLocal('account')).account;
   const box=el('div',{id:'cfe-session-sidebar',class:'roundbox'}),caption=el('div',{class:'caption titled'},'→ 本场训练'),body=el('div',{class:'cfe-session-sidebody'});box.append(caption,body);
   const sidebar=document.getElementById('sidebar');if(sidebar)sidebar.prepend(box);else document.getElementById('cfe-root')?.after(box);
   function render(){body.replaceChildren(link(current.name,sessionUrl(id)));const p=sessionProgress(current,account);body.append(note(`已看 ${p.viewed}/${p.total} · AC ${p.solved}/${p.total}`));const list=el('ol');current.problems.forEach((p,i)=>{const s=sessionState(current,p,account),li=el('li');if(key(p)===key(problem))li.className='cfe-session-current';li.append(link(`${alias(i)}. ${p.name}`,sessionProblemUrl(id,p)),el('small',{},` ${s.viewed?'已看':'未看'} · ${stateNames[s.state]}`));list.append(li);});body.append(list,link('返回本场 / 自由选题',sessionUrl(id)));}render();
-  const listener=(changes,area)=>{if(area!=='local')return;if(changes.account)account=changes.account.newValue;if(changes.trainings)current=changes.trainings.newValue?.find(s=>String(s.id)===String(id))||current;if(changes.account||changes.trainings)render();};chrome.storage.onChanged.addListener(listener);window.addEventListener('pagehide',()=>chrome.storage.onChanged.removeListener(listener),{once:true});
+  const listener=(changes,area)=>{if(area!=='local')return;if(changes.account)account=changes.account.newValue;if(changes.trainings)current=changes.trainings.newValue?.find(s=>String(s.id)===String(id))||current;if(changes.account||changes.trainings)render();};const unlisten=listenStorage(listener);window.addEventListener('pagehide',unlisten,{once:true});
 }
