@@ -1,11 +1,11 @@
 {
   "manifest_version": 3,
   "name": "CF Random · 随机跳题",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "按标签和难度区间随机打开 Codeforces 题目，自动记住筛选条件并避免重复抽题。",
   "permissions": ["storage"],
   "host_permissions": ["https://codeforces.com/*"],
   "action": { "default_popup": "popup.html", "default_title": "CF Random · 随机跳题" },
-  "content_scripts": [{ "matches": ["https://codeforces.com/*"], "js": ["homepage.js"], "run_at": "document_idle" }],
+  "content_scripts": [{ "matches": ["https://codeforces.com/*"], "js": ["homepage.js", "submit-helper.js"], "run_at": "document_idle" }],
   "web_accessible_resources": [{ "resources": ["popup.html", "popup.css", "popup.mjs", "core.mjs"], "matches": ["https://codeforces.com/*"] }]
 }

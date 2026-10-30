@@ -1,5 +1,4 @@
 (() => {
-  if (!/^\/(?:index\/\d+\/?)?$/.test(location.pathname)) return;
   if (document.getElementById('cf-random-picker-home')) return;
   const host = document.createElement('div');
   host.id = 'cf-random-picker-home';
