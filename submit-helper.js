@@ -3,7 +3,7 @@
   if(problem){
     // Carry the exact problem in each link; no shared "last problem" state that
     // could mix up two simultaneously opened problem tabs.
-    const destination=`/contest/${problem[1]}/submit?submittedProblemIndex=${encodeURIComponent(problem[2])}`;
+    const destination=`/contest/${problem[1]}/submit?submittedProblemIndex=${encodeURIComponent(problem[2])}&cfePractice=1`;
     function updateLinks(){
       for(const link of document.querySelectorAll('a[href]')){
         let url;try{url=new URL(link.getAttribute('href'),location.href);}catch{continue;}

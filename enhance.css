@@ -1,0 +1,22 @@
+#cfe-root{font:13px/1.5 Arial,"Microsoft YaHei",sans-serif;color:#333;margin:8px 0 16px}
+#cfe-root *,#cfe-ac *{box-sizing:border-box}
+#cfe-root .cfe-bar{border:0;border-bottom:1px solid #ddd;border-radius:0;background:none;display:flex;align-items:center;gap:16px;padding:4px 0 8px;flex-wrap:wrap}
+#cfe-root .cfe-bar strong{color:#333}#cfe-root button,#cfe-ac button{font:inherit;cursor:pointer;border:1px solid #aaa;border-radius:3px;background:linear-gradient(#fff,#eee);color:#222;padding:4px 10px}
+#cfe-root button:hover,#cfe-ac button:hover{border-color:#777;background:#eee}#cfe-root button:disabled{opacity:.55;cursor:wait}
+#cfe-root .cfe-bar button{border:0;background:none;box-shadow:none;border-radius:0;padding:0;color:#0000bb;text-decoration:none;font-size:12px}#cfe-root .cfe-bar button:hover{text-decoration:underline}#cfe-root .cfe-tab[aria-expanded=true]{color:#222;font-weight:bold;text-decoration:none}
+#cfe-training-nav,#cfe-language-nav{white-space:nowrap}#cfe-language-nav a{cursor:pointer}#cfe-root{scroll-margin-top:12px}
+#cfe-root .cfe-panel{border:1px solid #b9b9b9;border-radius:5px;padding:12px;margin-top:10px;background:#fff}
+#cfe-root [hidden],#cfe-ac[hidden]{display:none!important}#cfe-root h3{font-size:15px;margin:0 0 12px;color:#3b5998}#cfe-root p{margin:8px 0}
+#cfe-root input,#cfe-root select{font:inherit;border:1px solid #aaa;border-radius:2px;padding:4px 5px;background:#fff;color:#222;max-width:100%}
+#cfe-root label{display:inline-flex;align-items:center;gap:5px;margin:3px 12px 3px 0}#cfe-root input[type=checkbox]{margin:0}#cfe-root .cfe-hint{color:#777;font-size:12px}
+#cfe-root iframe{border:0;width:100%;height:650px;display:block}#cfe-root .cfe-groups{display:grid;gap:7px;margin:10px 0}#cfe-root .cfe-group{display:flex;align-items:center;gap:7px;flex-wrap:wrap;border-bottom:1px solid #eee;padding-bottom:8px}
+#cfe-root .cfe-group input[type=number]{width:76px}#cfe-root .cfe-group input[type=text]{width:180px}#cfe-root .cfe-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}
+#cfe-root table{border-collapse:collapse;width:100%;margin-top:12px;font-size:13px}#cfe-root th,#cfe-root td{border:1px solid #ddd;padding:7px 10px;text-align:left}#cfe-root th{background:#eee;font-weight:bold}#cfe-root tbody tr:nth-child(even){background:#f8f8f8}#cfe-root a{color:#0000bb}#cfe-root .cfe-ac-state{color:green;font-weight:bold}
+#cfe-ac{font:14px/1.5 Arial,sans-serif;border:1px solid #9ac39a;border-radius:4px;background:#f2fff2;padding:15px 20px;margin:12px 0;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+#cfe-ac strong{font-size:28px;line-height:1;color:green}#cfe-ac p{margin:0}#cfe-ac .cfe-sub{display:block;font-size:12px;color:#627762}
+html.cfe-hide-tags .tag-box:not(.cfe-rating),html.cfe-hide-tags .problem-statement .tags,html.cfe-hide-tags table.problems td>div:has(a.notice[href*="tags="]){display:none!important}
+html.cfe-hide-rating .cfe-rating,html.cfe-hide-rating .ProblemRating{display:none!important}
+html.cfe-focus #sidebar{display:none!important}html.cfe-focus #pageContent{margin-right:0!important}
+html.cfe-readable .problem-statement{font-size:16px;line-height:1.75}html.cfe-readable .problem-statement p{line-height:1.75}
+.cfe-copy{float:right;font:11px Arial!important;padding:2px 7px!important;margin:3px;cursor:pointer}.cfe-training-id{color:#777;font-size:12px}
+@media(max-width:650px){#cfe-root .cfe-bar{gap:10px}#cfe-root .cfe-panel{padding:10px}#cfe-root table{font-size:12px}#cfe-root td,#cfe-root th{padding:5px}}

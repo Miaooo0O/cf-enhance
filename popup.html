@@ -1,7 +1,8 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CF Random</title><link rel="stylesheet" href="popup.css"></head>
 <body><main>
-<header><div class="logo">CF<span>↗</span></div><div><h1>随机跳题</h1><p>少一点纠结，多一道好题。</p></div><span class="badge">CODEFORCES</span></header>
+<header><h1>随机跳题</h1></header>
+<section><label for="handle" class="heading">Codeforces handle</label><div class="accountRow"><input id="handle" placeholder="你的 CF 用户名" autocomplete="off"><button id="sync" type="button">同步记录</button></div><p id="accountInfo" role="status">尚未同步</p><label>抽题排除 <select id="exclude"><option value="ac">已 AC 的题</option><option value="tried">所有尝试过的题</option><option value="none">不排除提交过的题</option></select></label></section>
 <form id="filters">
 <section><label class="heading">难度区间 <span>RATING</span></label><div class="range"><input id="min" aria-label="最低分" type="number" min="0" step="100" value="800" required><b>—</b><input id="max" aria-label="最高分" type="number" min="0" step="100" value="2000" required></div><div class="presets"><button type="button" data-range="800,1200">入门</button><button type="button" data-range="1300,1700">进阶</button><button type="button" data-range="1800,2200">挑战</button><button type="button" data-range="2300,3500">高难</button></div></section>
 <section><div class="heading">题目标签 <span id="tagCount">不限标签</span></div><input id="search" type="search" placeholder="搜索标签，例如 dp / 图论" aria-label="搜索标签"><div id="tags" class="tags"></div><div class="tagFooter"><select id="mode" aria-label="标签匹配模式"><option value="all">同时包含所选标签</option><option value="any">包含任意所选标签</option></select><button id="clearTags" type="button" class="link">清空标签</button></div></section>
@@ -9,6 +10,6 @@
 <button id="draw" class="primary" type="submit">随机跳一道 <span>↗</span></button>
 </form>
 <div id="status" role="status" aria-live="polite">正在读取题库…</div><a id="last" target="_blank" rel="noopener" hidden></a>
-<details id="historyPanel"><summary>跳题记录 <span id="historyCount">0</span></summary><input id="historySearch" type="search" aria-label="搜索跳题记录" placeholder="搜索题号或题名"><div id="historyList"></div><button id="moreHistory" type="button" class="link" hidden>显示更多</button></details>
+<details id="historyPanel"><summary>刷题记录 <span id="historyCount">0</span></summary><input id="historySearch" type="search" aria-label="搜索跳题记录" placeholder="搜索题号或题名"><div class="historyFilters"><select id="historyState" aria-label="做题状态"><option value="all">全部状态</option><option value="new">未提交</option><option value="tried">尝试中</option><option value="ac">已通过</option></select><input id="historyMin" type="number" placeholder="最低分" aria-label="记录最低分"><input id="historyMax" type="number" placeholder="最高分" aria-label="记录最高分"></div><input id="historyTag" placeholder="标签包含，例如 dp" aria-label="记录标签筛选"><label class="dateFilter">抽题日期 <input id="historyDate" type="date"></label><div id="historyList"></div><button id="moreHistory" type="button" class="link" hidden>显示更多</button></details>
 <footer><button id="refresh" class="link">刷新题库</button><span id="cacheInfo"></span><button id="reset" class="link">重置去重记录</button></footer>
-</main><script type="module" src="popup.mjs"></script></body></html>
+</main><script type="module" src="popup-entry.mjs"></script></body></html>
