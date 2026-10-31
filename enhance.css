@@ -5,6 +5,7 @@
 #cfe-root button:hover,#cfe-ac button:hover{border-color:#777;background:#eee}#cfe-root button:disabled{opacity:.55;cursor:wait}
 #cfe-root .cfe-bar button{border:0;background:none;box-shadow:none;border-radius:0;padding:0;color:#0000bb;text-decoration:none;font-size:12px}#cfe-root .cfe-bar button:hover{text-decoration:underline}#cfe-root .cfe-tab[aria-expanded=true]{color:#222;font-weight:bold;text-decoration:none}
 #cfe-training-nav,#cfe-language-nav{white-space:nowrap}#cfe-language-nav a{cursor:pointer}#cfe-root{scroll-margin-top:12px}
+#cfe-companion{border:1px solid #b9b9b9;border-radius:5px;padding:10px 14px;margin:10px 0;font:13px/1.6 Arial,sans-serif}#cfe-companion[hidden]{display:none}#cfe-companion p{margin:0 0 8px}#cfe-companion button,.cfe-bind{font:12px Arial;border:1px solid #aaa;border-radius:2px;padding:4px 8px;background:#f5f5f5;color:#0000bb;cursor:pointer}.cfe-bind{display:block;margin-top:4px;max-width:160px;font-size:10px}
 #cfe-root .cfe-panel{border:1px solid #b9b9b9;border-radius:5px;padding:12px;margin-top:10px;background:#fff}
 #cfe-root [hidden],#cfe-ac[hidden]{display:none!important}#cfe-root h3{font-size:15px;margin:0 0 12px;color:#3b5998}#cfe-root p{margin:8px 0}
 #cfe-root input,#cfe-root select{font:inherit;border:1px solid #aaa;border-radius:2px;padding:4px 5px;background:#fff;color:#222;max-width:100%}

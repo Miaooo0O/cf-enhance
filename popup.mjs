@@ -2,6 +2,7 @@ import { key, problemUrl } from './core.mjs';
 import {request,getLocal,listenStorage} from './client.mjs';
 import {statusOf,candidates} from './model.mjs';
 import {tagNames as names,displayTag,normalizeTag} from './tags.mjs';
+import {mountBridgePopup} from './bridge-popup.mjs';
 export async function mountPicker(root=document,options={}) {
 const $ = id => root.querySelector('#'+id);
 let problems = [], selected = new Set(), history = [], drawLog=[], historyLimit=30, busy = false, cache = null, account=null, chinese=false;
@@ -90,5 +91,6 @@ if(options.embedded)container.classList.add('embedded');
 const onStorage=(changes,area)=>{if(area!=='local'||!['account','drawLog','history','preferences'].some(k=>changes[k]))return;if(changes.preferences){chinese=!!changes.preferences.newValue?.chinese;render();}if(changes.account){account=changes.account.newValue;accountInfo();}if(changes.drawLog)drawLog=changes.drawLog.newValue||[];if(changes.history)history=changes.history.newValue||[];renderHistory();updateCount();};
 const unlisten=listenStorage(onStorage);
 await init();
-return unlisten;
+const unlistenBridge=options.embedded?()=>{}:await mountBridgePopup(root);
+return ()=>{unlisten();unlistenBridge();};
 }

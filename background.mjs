@@ -1,11 +1,16 @@
 import {key, choose, problemUrl} from './core.mjs';
 import {candidates, summarize, generateTraining} from './model.mjs';
 import {readSessions,markViewed} from './sessions.mjs';
+import {createBridgeWorker} from './bridge-worker.mjs';
 // One queue across all tabs: API requests obey CF's two-second interval,
 // storage mutations cannot overwrite another tab's draw or account settings.
 let queue=Promise.resolve();
 const recentCache=new Map();
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const bridge=createBridgeWorker({chrome,api:(method,params)=>{const job=queue.then(()=>api(method,params));queue=job.catch(()=>{});return job;}});
+let bridgeQueue=Promise.resolve();
+chrome.alarms?.onAlarm.addListener(alarm=>{if(alarm.name==='cfe-bridge'){const job=bridgeQueue.then(()=>bridge.tick());bridgeQueue=job.catch(()=>{});}});
+chrome.runtime.onStartup?.addListener(()=>{void chrome.storage.local.get('bridgeConnection').then(s=>{if(s.bridgeConnection)chrome.alarms?.create('cfe-bridge',{periodInMinutes:.5});});});
 async function api(method,params={}){
   const {apiLast=0}=await chrome.storage.local.get('apiLast');
   await sleep(Math.max(0,2200-(Date.now()-apiLast)));
@@ -99,6 +104,7 @@ async function handleMessage(m){
 }
 chrome.runtime.onMessage.addListener((m,sender,reply)=>{
   if(sender.id!==chrome.runtime.id)return;
+  if(typeof m?.type==='string'&&m.type.startsWith('bridge')){const job=bridgeQueue.then(()=>bridge.handle(m,sender));bridgeQueue=job.catch(()=>{});job.then(data=>reply({ok:true,data}),e=>reply({ok:false,error:e.message}));return true;}
   const job=queue.then(()=>handleMessage(m));queue=job.catch(()=>{});
   job.then(data=>reply({ok:true,data}),e=>reply({ok:false,error:e.message}));return true;
 });

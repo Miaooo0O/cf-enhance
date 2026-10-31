@@ -1,7 +1,8 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CF Random</title><link rel="stylesheet" href="popup.css"></head>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CF Enhance</title><link rel="stylesheet" href="popup.css"></head>
 <body><main>
 <header><h1>随机跳题</h1></header>
+<details class="popupOnly"><summary>VS Code 联动（可选）</summary><p>在 VS Code 执行“CF Enhance: 配对浏览器”，粘贴复制的配对码。</p><input id="bridgeCode" type="password" placeholder="粘贴一次性配对码" aria-label="VS Code 配对码" autocomplete="off"><div class="accountRow"><button id="bridgeConnect" type="button">连接 VS Code</button><button id="bridgeDisconnect" type="button">断开连接</button></div><p id="bridgeStatus" role="status">未连接</p></details>
 <section><label for="handle" class="heading">Codeforces handle</label><div class="accountRow"><input id="handle" placeholder="你的 CF 用户名" autocomplete="off"><button id="sync" type="button">同步记录</button></div><p id="accountInfo" role="status">尚未同步</p><label>抽题排除 <select id="exclude"><option value="ac">已 AC 的题</option><option value="tried">所有尝试过的题</option><option value="none">不排除提交过的题</option></select></label></section>
 <form id="filters">
 <section><label class="heading">难度区间 <span>RATING</span></label><div class="range"><input id="min" aria-label="最低分" type="number" min="0" step="100" value="800" required><b>—</b><input id="max" aria-label="最高分" type="number" min="0" step="100" value="2000" required></div><div class="presets"><button type="button" data-range="800,1200">入门</button><button type="button" data-range="1300,1700">进阶</button><button type="button" data-range="1800,2200">挑战</button><button type="button" data-range="2300,3500">高难</button></div></section>

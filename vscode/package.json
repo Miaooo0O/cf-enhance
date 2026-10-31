@@ -1,0 +1,22 @@
+{
+ "name":"cf-enhance-companion","displayName":"CF Enhance Companion","description":"CF Enhance 的可选 VS Code 联动：自由选择代码、目标题目与语言，接收提交反馈。",
+ "version":"0.1.0","publisher":"Miaooo0O","engines":{"vscode":"^1.85.0"},"categories":["Other"],"extensionKind":["ui"],
+ "main":"./extension.cjs","icon":"icon.png","activationEvents":["onStartupFinished"],
+ "capabilities":{"untrustedWorkspaces":{"supported":"limited","description":"可查看记录；提交代码、连接与运行样例需要信任工作区。"}},
+ "repository":{"type":"git","url":"https://github.com/Miaooo0O/cf-enhance"},
+ "contributes":{
+  "commands":[
+   {"command":"cfEnhance.pair","title":"CF Enhance: 配对浏览器"},
+   {"command":"cfEnhance.submit","title":"CF Enhance: 选择代码和题目并提交"},
+   {"command":"cfEnhance.tasks","title":"CF Enhance: 查看提交任务"},
+   {"command":"cfEnhance.openProblem","title":"CF Enhance: 在网页打开题目"},
+   {"command":"cfEnhance.cancel","title":"CF Enhance: 取消提交任务"},
+   {"command":"cfEnhance.disconnect","title":"CF Enhance: 断开并撤销浏览器配对"},
+   {"command":"cfEnhance.copyCode","title":"CF Enhance: 复制任务代码"},
+   {"command":"cfEnhance.runSamples","title":"CF Enhance: 用当前编辑器运行网页题目样例（C++）"}
+  ],
+  "views":{"explorer":[{"id":"cfEnhance.tasks","name":"CF Enhance 提交任务"}]},
+  "menus":{"editor/title":[{"command":"cfEnhance.submit","group":"navigation@100"}],"view/title":[{"command":"cfEnhance.pair","when":"view == cfEnhance.tasks","group":"navigation"},{"command":"cfEnhance.submit","when":"view == cfEnhance.tasks","group":"navigation"}]},
+  "configuration":{"title":"CF Enhance","properties":{"cfEnhance.port":{"type":"number","default":27121,"minimum":1024,"maximum":65535,"description":"本机配对服务端口；更改后重新加载 VS Code。"},"cfEnhance.compiler":{"type":"string","default":"g++","description":"本地样例测试使用的 C++ 编译器程序路径（不含额外参数）。"}}}
+ },"scripts":{"test":"node --test *.test.cjs"},"license":"MIT"
+}
