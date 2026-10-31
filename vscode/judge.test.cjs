@@ -1,5 +1,13 @@
 const test=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs/promises');const os=require('node:os');const path=require('node:path');const {JudgeStore}=require('./judge-store.cjs');const {runCases,compareOutput}=require('./judge-runner.cjs');const {execute}=require('./samples.cjs');
 function storage(){const data={};return {get:(k,d)=>data[k]||d,update:async(k,v)=>{data[k]=structuredClone(v);}};}
+test('one file keeps separate problem suites; edited/deleted samples survive resync and undo restores the original position',async()=>{
+ const saved=storage(),store=new JudgeStore(saved),a={contestId:1768,index:'E'},b={contestId:2272,index:'A'},sa=store.forProblem('file:1.cpp','1.cpp',a);
+ await store.import(sa.key,a,[{input:'A',output:'1'},{input:'AA',output:'2'}]);const id=store.suites[sa.key].cases[0].id;await store.edit(sa.key,id,{input:'custom A'});
+ const sb=store.forProblem('file:1.cpp','1.cpp',b);await store.import(sb.key,b,[{input:'B',output:'9'}]);assert.notEqual(sa.key,sb.key);assert.equal(store.forProblem('file:1.cpp','1.cpp',a).cases[0].input,'custom A');
+ await store.remove(sa.key,id);await store.import(sa.key,a,[{input:'A',output:'1'},{input:'AA',output:'2'}]);assert.equal(store.suites[sa.key].cases.length,1);await store.restore(sa.key);assert.equal(store.suites[sa.key].cases[0].id,id);assert.equal(store.suites[sa.key].cases[0].input,'custom A');
+ await store.import(sa.key,a,[{input:'A',output:'1'},{input:'AA',output:'3'}]);assert.equal(store.suites[sa.key].cases.length,2);assert.equal(store.suites[sa.key].cases[0].input,'custom A');assert.equal(store.suites[sa.key].cases[1].expected,'3');
+ await store.flush();assert.equal(new JudgeStore(saved).forProblem('file:1.cpp','1.cpp',b).cases[0].input,'B');assert.equal(store.forProblem('file:2.cpp','2.cpp',a).cases[0].input,'');
+});
 test('custom cases persist per source, imported samples deduplicate, and new problems retain edited/manual tests',async()=>{
  const saved=storage(),store=new JudgeStore(saved),s=store.suite('file:a.cpp','a.cpp'),id=s.cases[0].id;await store.edit(s.key,id,{input:'custom',expected:'answer',compare:true});
  assert.equal(await store.import(s.key,{contestId:10,index:'A'},[{input:'1\n',output:'2\n'}]),1);assert.equal(await store.import(s.key,{contestId:10,index:'A'},[{input:'1\r\n',output:'2\r\n'}]),0);const imported=store.suites[s.key].cases.find(c=>c.origin==='web');await store.edit(s.key,imported.id,{expected:'my edited answer'});

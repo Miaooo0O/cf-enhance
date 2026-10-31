@@ -1,10 +1,10 @@
 {
   "name": "cf-enhance",
-  "version": "3.4.0",
+  "version": "3.5.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test core.test.mjs model.test.mjs background.test.mjs ui.test.mjs bridge.test.mjs vscode/bridge.test.cjs vscode/samples.test.cjs vscode/extension.test.cjs vscode/ports.test.cjs vscode/panel.test.cjs vscode/cph.test.cjs vscode/judge.test.cjs",
+    "test": "node --test core.test.mjs model.test.mjs background.test.mjs ui.test.mjs bridge.test.mjs vscode/bridge.test.cjs vscode/samples.test.cjs vscode/extension.test.cjs vscode/ports.test.cjs vscode/panel.test.cjs vscode/cph.test.cjs vscode/judge.test.cjs vscode/interactive.test.cjs",
     "build:i18n": "node scripts/build-i18n.mjs"
   },
   "devDependencies": {

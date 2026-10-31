@@ -42,7 +42,7 @@ Chrome 的本机访问权限为可选权限，仅用户点击连接后申请。�
 
 已实现从 VS Code 一键自动提交与反馈、从场次选题、打开网页题目、C++ 本地样例测试。没有正式比赛倒计时切题、VS Code 题面翻译或云同步。
 
-76 项自动化测试包含真实 loopback HTTP、VS Code API 模拟命令与可视提交、面板脚本交互、端口冲突恢复、身份与源码核对、歧义提交绑定、原生表单适配及实际 C++ 编译运行。没有在用户账号上代提交，也没有通过 Chrome/VS Code 真机安装验收。
+83 项自动化测试包含真实 loopback HTTP、VS Code API 模拟命令与可视提交、面板脚本交互、端口冲突恢复、身份与源码核对、歧义提交绑定、原生表单适配及实际 C++ 编译运行。没有在用户账号上代提交，也没有通过 Chrome/VS Code 真机安装验收。
 
 提交页“我的提交”基线请求限时 6 秒，不等待公共 API。自动新建标签页允许替换站点恢复的旧代码，手动编辑或恢复已有标签页仍保护草稿。45 秒未准备、60 秒未取得编号时提示具体状态，不自动重复发送。导航上下文按标签页保存，AC 后随机和有序前进相互独立。
 
@@ -57,3 +57,11 @@ Chrome 3.3.0 新增题单软删除：canonical trainings 与 trainingTrash 同�
 compile-cache.cjs 在当前扩展宿主保留一个临时构建。代码、编译器身份、环境与目录组成缓存键，GCC -MD 依赖内容摘要校验头文件；依赖读取失败则下次重新编译。失败与取消清空缓存，deactivate 在停止进程后清理拥有的目录。
 
 i18n-start.js 由 npm run build:i18n 从 i18n.mjs 与 tags.mjs 生成，与 page-start.js 一起 document_start 执行。只将非敏感显示偏好镜像到 CF localStorage，扩展存储是权威来源；解析阶段观察新增 UI 并翻译，不隐藏整页或翻译题面。题单 URL 提前加 class，用早期 CSS 隐藏原生题库，独立题单挂载后显示；初始化并行读取本地信息，不提前拉取完整题库。随机和历史面板各只挂载一次，pagehide 统一清理。
+
+## 3.5 / Companion 0.7 选题关联与交互
+
+selectTarget 由面板显式发送，手动选题固定；followWeb 才跟随 context。文件 URI 的摘要＋CF 题号组成独立 suite key，sourceKey 只做本地映射。相同题号的旧版 suite 可迁移，原数据保留；runTests 校验实际文件与当前 scope，迟到的结果不显示在另一题下。当前任务按选择题号筛选，全局记录进入折叠历史。
+
+Bridge 新增 samples 命令与鉴权 /samples 回传，UUID＋题号＋有效期绑定，缓存最多 50 题。Chrome 向已打开的 CF 内容脚本发送 cfeFetchSamples，同源只读 fetch 目标页并用 DOMParser 读取样例，不导航、不提交代码。错误与超时可重试。样例按原始序号关联，编辑保护与删除标记保留，撤销按原顺序恢复。
+
+interactive.cjs 独立编译快照，保持 stdin 开放，用标准管道实时通信；C/C++/Python，Python -u。独立 WebviewPanel 只允许开始、发送、EOF、停止、复制与 ready 消息，检查工作区信任。单次输入 64 KiB，通信 1 MiB，上限 2000 个记录片段，会话默认 120s、编译 30s。关闭或 deactivate 终止拥有的进程树并清理专属临时目录。手动扮演交互器，没有内置官方判题逻辑。

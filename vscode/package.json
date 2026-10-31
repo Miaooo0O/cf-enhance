@@ -1,8 +1,8 @@
 {
   "name": "cf-enhance-companion",
   "displayName": "CF Enhance · 本地评测与提交",
-  "description": "精简的本地评测：自定义输入输出、CF 样例同步、逐例或批量运行，以及网页提交反馈。",
-  "version": "0.6.0",
+  "description": "切题同步样例与反馈、独立本地测试、手动交互窗口和网页自动提交。",
+  "version": "0.7.0",
   "publisher": "Miaooo0O",
   "engines": {
     "vscode": "^1.85.0"
@@ -135,6 +135,13 @@
             "保留内部空白，只忽略行尾格式与末尾空白"
           ],
           "description": "本地测试的输出比较方式。"
+        },
+        "cfEnhance.interactiveTimeout": {
+          "type": "integer",
+          "default": 120000,
+          "minimum": 1000,
+          "maximum": 600000,
+          "description": "手动交互会话的总时限（毫秒），包含等待回复时间。"
         }
       }
     },

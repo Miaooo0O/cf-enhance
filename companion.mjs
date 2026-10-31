@@ -1,4 +1,13 @@
 import {request,getLocal,contextActive} from './client.mjs';
+export async function fetchProblemSamples(problem,{fetch:fetcher=fetch,Parser=DOMParser}={}){
+ if(!Number.isSafeInteger(problem?.contestId)||problem.contestId<=0||!/^[A-Z]\d*$/.test(problem.index))throw Error('目标题目无效');
+ const response=await fetcher(`https://codeforces.com/problemset/problem/${problem.contestId}/${problem.index}`,{credentials:'include',signal:AbortSignal.timeout(12000)});
+ if(!response.ok)throw Error('CF 题目读取失败（'+response.status+'），请在 Chrome 打开该题后重试。');
+ const doc=new Parser().parseFromString(await response.text(),'text/html'),inputs=[...doc.querySelectorAll('.sample-test .input pre')],outputs=[...doc.querySelectorAll('.sample-test .output pre')];
+ if(!inputs.length||inputs.length!==outputs.length)throw Error('未找到样例，请在 Chrome 打开目标题目并检查登录或验证页面。');
+ const text=pre=>{const copy=pre.cloneNode(true);for(const br of copy.querySelectorAll('br'))br.replaceWith('\n');for(const line of copy.querySelectorAll('.test-example-line'))line.append('\n');return copy.textContent.replace(/\r\n?/g,'\n').replace(/\n$/,'');};
+ const samples=inputs.slice(0,20).map((pre,i)=>({input:text(pre),output:text(outputs[i])}));if(samples.some(s=>s.input.length>65536||s.output.length>65536))throw Error('样例过长，请手动添加');return samples;
+}
 import {hashSource,languageOption} from './bridge-protocol.mjs';
 const el=(tag,text)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n;};
 export function loggedHandle(doc=document){const a=doc.querySelector('#header .lang-chooser a[href*="/profile/"]');return a?decodeURIComponent(new URL(a.getAttribute('href'),'https://codeforces.com').pathname.split('/').pop()):null;}

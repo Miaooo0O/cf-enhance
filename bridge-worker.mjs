@@ -25,7 +25,10 @@ export function createBridgeWorker({chrome,api,fetch:fetcher=fetch,now=Date.now}
    if(data.capabilities?.webFeedback){const {webFeedback={}}=await chrome.storage.local.get('webFeedback');const linked=new Set(Object.values(await tasks()).map(t=>t.submissionId).filter(Boolean));for(const [id,row]of Object.entries(webFeedback).sort((a,b)=>Number(a[0])-Number(b[0])).slice(-20)){const signature=JSON.stringify([row.verdict,row.passedTests,row.timeMs,row.memoryBytes]);if(!linked.has(Number(id))&&row.sentSignature!==signature){await event({id:'web:'+id},{type:'observed',...row});row.sentSignature=signature;}}await serial(async()=>{const {webFeedback:latest={}}=await chrome.storage.local.get('webFeedback');for(const [id,row]of Object.entries(webFeedback)){if(latest[id]&&JSON.stringify([latest[id].verdict,latest[id].passedTests,latest[id].timeMs,latest[id].memoryBytes])===row.sentSignature)latest[id].sentSignature=row.sentSignature;}await chrome.storage.local.set({webFeedback:latest});});}
 
    const all=await tasks();for(const id of data.cancelled||[]){if(all[id]&&!finalStates.has(all[id].state)){all[id].state='cancelled';delete all[id].source;await writeTask(all[id]);}}
-   for(const command of data.commands||[])if(command.type==='open'&&validProblem(command.problem))await chrome.tabs.create({url:`https://codeforces.com/problemset/problem/${command.problem.contestId}/${command.problem.index}`});
+   for(const command of data.commands||[]){
+    if(command.type==='open'&&validProblem(command.problem))await chrome.tabs.create({url:`https://codeforces.com/problemset/problem/${command.problem.contestId}/${command.problem.index}`});
+    if(command.type==='samples'&&validProblem(command.problem))void fetchSamples(command).catch(()=>{});
+   }
    if(data.task){const remote=data.task;
     if(!/^[\da-f-]{36}$/i.test(remote.id)||!validProblem(remote.problem)||typeof remote.source!=='string'||remote.source.length>1024*1024||await hashSource(remote.source)!==remote.hash)throw Error('提交任务数据校验失败');
     const existing=(await tasks())[remote.id];
@@ -40,6 +43,12 @@ export function createBridgeWorker({chrome,api,fetch:fetcher=fetch,now=Date.now}
    }
    if(!monitoring){monitoring=monitor().catch(()=>{}).finally(()=>{monitoring=null;});}
   }catch(e){await state('联动暂不可用：'+e.message,false);}finally{busy=false;}
+ }
+ async function fetchSamples(command){
+  let result;
+  try{const tabs=await chrome.tabs.query({url:'https://codeforces.com/*'}),tab=tabs.find(t=>t.active)||tabs[0];if(!tab)throw Error('请保持一个 CF 页面打开后重试。');result=await chrome.tabs.sendMessage(tab.id,{type:'cfeFetchSamples',problem:command.problem});if(!result||!Array.isArray(result.samples)&&!result.error)throw Error('请更新并刷新 Chrome 中的 CF 页面。');}
+  catch(e){result={error:/Receiving end|Could not establish/.test(e.message)?'请更新 Chrome 插件并刷新 CF 页面后重试。':e.message};}
+  await post('/samples',{id:command.id,problem:command.problem,...result});
  }
  async function monitor(){
   const all=await tasks();for(const t of Object.values(all)){const age=now()-(t.updated||t.created);if(['opened','prepared'].includes(t.state)&&age>45000){t.state='error';await writeTask(t);await event(t,{type:'state',state:'error',detail:'CF 提交页未在 45 秒内准备完成，请查看网页后重新提交。'});}else if(t.state==='submitted'&&!t.submissionId&&now()-t.submittedAt>60000&&!t.waitNotice){t.waitNotice=true;await writeTask(t);await event(t,{type:'state',state:'submitted',attention:true,detail:'尚未识别到 CF 提交编号。请点“查看网页”检查是否被验证码、限流或表单错误阻止；不会重复提交。'});}}const active=Object.values(all).filter(t=>['submitted','judging'].includes(t.state)&&t.handle);const handles=[...new Set(active.map(t=>t.handle))];

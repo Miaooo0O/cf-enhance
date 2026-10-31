@@ -16,10 +16,14 @@ function parseProblem(input){
 const validProblem=p=>Number.isSafeInteger(p?.contestId)&&p.contestId>0&&/^[A-Z]\d*$/.test(p.index);
 function publicTask(task){const {source,...metadata}=task;return structuredClone(metadata);}
 class Bridge {
- constructor({tasks=[],credentials=null,onChange=()=>{},saveCredentials=async()=>{},now=Date.now}={}){
+ constructor({tasks=[],credentials=null,onChange=()=>{},onContext=()=>{},saveCredentials=async()=>{},now=Date.now}={}){
   this.tasks=tasks.map(t=>{const resume=['submitted','judging'].includes(t.state)||t.state==='interrupted'&&t.submissionId;return {...publicTask(t),state:resume?t.submissionId?'judging':'submitted':terminal.has(t.state)?t.state:'interrupted',detail:resume?'VS Code 已恢复，继续接收网页反馈；不会重新提交代码。':terminal.has(t.state)?t.detail:'VS Code 已重启，请重新准备代码或在 CF 查看原提交。'};});
-  this.credentials=credentials;this.onChange=onChange;this.saveCredentials=saveCredentials;this.now=now;this.context={};this.lastSeen=0;this.commands=[];
+  this.credentials=credentials;this.onChange=onChange;this.onContext=onContext;this.sampleCache=new Map();this.sampleRequests=new Map();this.saveCredentials=saveCredentials;this.now=now;this.context={};this.lastSeen=0;this.commands=[];
  }
+ sampleKey(p){return p.contestId+'/'+p.index;}
+ cacheSamples(problem,samples){if(!validProblem(problem)||!Array.isArray(samples)||!samples.length||samples.length>20||samples.some(s=>typeof s.input!=='string'||typeof s.output!=='string'||s.input.length>65536||s.output.length>65536))return false;this.sampleCache.set(this.sampleKey(problem),{problem,samples:structuredClone(samples),updated:this.now()});if(this.sampleCache.size>50)this.sampleCache.delete(this.sampleCache.keys().next().value);return true;}
+ samplesFor(problem){if(!problem)return null;const key=this.sampleKey(problem),pending=this.sampleRequests.get(key);if(pending&&this.now()-pending.created>25000){this.sampleRequests.delete(key);this.sampleCache.set(key,{error:'样例同步超时，请确认 Chrome 插件已更新、CF 页面已打开后重试。',updated:this.now()});}return {...this.sampleCache.get(key),pending:this.sampleRequests.has(key)};}
+ requestSamples(problem,force=false){if(!validProblem(problem))throw Error('目标题目无效');const key=this.sampleKey(problem),cached=this.samplesFor(problem);if(this.sampleRequests.has(key)||!force&&cached?.samples?.length)return;const request={id:randomUUID(),problem,created:this.now()};this.sampleRequests.set(key,request);this.commands=this.commands.filter(c=>c.type!=='samples'||this.sampleKey(c.problem)!==key);this.commands.push({type:'samples',...request});}
  notify(){this.onChange(this.tasks.map(publicTask));}
  issuePairing(){this.pairCode=randomBytes(24).toString('base64url');this.pairExpires=this.now()+300000;return `cfe-pair:${this.port}:${this.pairCode}`;}
  async revoke(){this.credentials=null;this.pairCode=null;this.lastSeen=0;await this.saveCredentials(null);this.notify();}
@@ -56,9 +60,17 @@ class Bridge {
    this.credentials={extensionId:body.extensionId,token:randomBytes(32).toString('base64url')};this.pairCode=null;await this.saveCredentials(this.credentials);this.lastSeen=this.now();this.notify();return this.reply(res,200,{token:this.credentials.token,version:1});
   }
   this.lastSeen=this.now();
+  if(req.url==='/samples'){
+   if(!validProblem(body.problem))return this.reply(res,400,{error:'Invalid sample problem'});
+   const key=this.sampleKey(body.problem),pending=this.sampleRequests.get(key);if(!pending||pending.id!==body.id||this.now()-pending.created>30000)return this.reply(res,409,{error:'Sample request expired'});
+   this.sampleRequests.delete(key);
+   if(body.error)this.sampleCache.set(key,{error:String(body.error).slice(0,200),updated:this.now()});else if(!this.cacheSamples(body.problem,body.samples))return this.reply(res,400,{error:'Invalid samples'});
+   this.onContext();return this.reply(res,200,{ok:true});
+  }
   if(req.url==='/poll'){
    if(body.context)this.context={problem:validProblem(body.context.problem)?body.context.problem:this.context.problem,handle:String(body.context.handle||'').slice(0,24),sessions:Array.isArray(body.context.sessions)?body.context.sessions.slice(0,20):[],samples:Array.isArray(body.context.samples)?body.context.samples.slice(0,20):[],autoSubmit:body.context.autoSubmit===true,protocolVersion:Number(body.context.protocolVersion)||1,sessionId:body.context.sessionId||null,mode:body.context.mode==='random'?'random':'contest',updated:this.now()};
-   for(const t of this.tasks)if(!terminal.has(t.state)&&this.now()-t.created>86400000){t.state='expired';delete t.source;}
+   if(validProblem(body.context?.problem))this.cacheSamples(body.context.problem,body.context.samples);
+   this.onContext();for(const t of this.tasks)if(!terminal.has(t.state)&&this.now()-t.created>86400000){t.state='expired';delete t.source;}
    const task=this.tasks.find(t=>['queued','opened'].includes(t.state)&&t.source);return this.reply(res,200,{capabilities:{webFeedback:true},task:task?structuredClone(task):null,commands:this.commands.splice(0),cancelled:this.tasks.filter(t=>terminal.has(t.state)).map(t=>t.id)});
   }
   if(req.url==='/event'){

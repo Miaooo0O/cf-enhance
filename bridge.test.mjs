@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {parseHTML,DOMParser} from 'linkedom';
 import {createBridgeWorker} from './bridge-worker.mjs';import {parsePairing,hashSource,submissionMatches,extractSource} from './bridge-protocol.mjs';
-import {parseResultRows,fillNativeTask,submitNativeTask,mountCompanion} from './companion.mjs';
+import {parseResultRows,fillNativeTask,submitNativeTask,mountCompanion,fetchProblemSamples} from './companion.mjs';
 import bridgeModule from './vscode/bridge.cjs';const {Bridge,sourceHash}=bridgeModule;
 const extensionId='a'.repeat(32),source='#include <bits/stdc++.h>\nint main(){return 0;}\n';
 async function environment(){
@@ -14,6 +14,27 @@ async function environment(){
  return {server,worker,state,tabs,form,chrome,setApi:f=>apiOverride=f,setOffline:value=>offline=value,setSubmissions:s=>submissions=s,advance:n=>clock+=n,sourceRequests:()=>sourceRequests};
 }
 test('pairing parser only accepts local port and cryptographic one-time code',()=>{assert.deepEqual(parsePairing('cfe-pair:27121:'+'a'.repeat(32)),{port:27121,code:'a'.repeat(32)});for(const text of ['http://evil.test','cfe-pair:80:'+'a'.repeat(32),'cfe-pair:27121:123456'])assert.throws(()=>parsePairing(text));});
+
+test('sample requests target the selected problem without navigating or submitting, and cached problems stay isolated',async()=>{
+ const e=await environment();try{
+  const problem={contestId:1768,index:'E'};await e.chrome.tabs.create({url:'https://codeforces.com/problemset/problem/2272/A'});
+  let requested;e.chrome.tabs.sendMessage=async(id,m)=>{requested=m.problem;return {samples:await fetchProblemSamples(m.problem,{Parser:DOMParser,fetch:async()=>new Response('<div class="sample-test"><div class="input"><pre><div class="test-example-line">1 &lt; 2</div><div class="test-example-line">3</div></pre></div><div class="output"><pre>9<br>8</pre></div></div>')})};};
+  e.server.requestSamples(problem);await e.worker.tick();for(let i=0;i<20&&!e.server.samplesFor(problem)?.samples;i++)await new Promise(r=>setTimeout(r,10));
+  assert.deepEqual(requested,problem);assert.equal(e.server.samplesFor(problem).samples[0].input,'1 < 2\n3');assert.equal(e.server.samplesFor(problem).samples[0].output,'9\n8');assert.equal(e.tabs.size,1);assert.equal(e.server.tasks.length,0);assert.equal(e.server.samplesFor({contestId:2272,index:'A'}).samples,undefined);
+  e.server.requestSamples(problem);assert.equal(e.server.commands.length,0);e.server.requestSamples(problem,true);assert.equal(e.server.commands.length,1);
+  await assert.rejects(fetchProblemSamples(problem,{Parser:DOMParser,fetch:async()=>new Response('<html>Login</html>')}),/未找到样例/);
+ }finally{await e.server.close();}
+});
+
+test('expired and mismatched sample replies cannot replace the selected problem cache; retry uses a new request id',async()=>{
+ const e=await environment();try{
+  const a={contestId:1768,index:'E'},b={contestId:2272,index:'A'},connection=e.state.bridgeConnection;
+  const reply=async body=>fetch(`http://127.0.0.1:${e.server.port}/samples`,{method:'POST',headers:{'Content-Type':'application/json','X-CFE-Client':extensionId,Authorization:`Bearer ${connection.token}`},body:JSON.stringify(body)});
+  e.server.requestSamples(a);const old=e.server.sampleRequests.get('1768/E');e.advance(26000);assert.match(e.server.samplesFor(a).error,/超时/);e.server.requestSamples(a,true);const current=e.server.sampleRequests.get('1768/E');assert.notEqual(old.id,current.id);
+  assert.equal((await reply({id:old.id,problem:a,samples:[{input:'old',output:'wrong'}]})).status,409);assert.equal((await reply({id:current.id,problem:b,samples:[{input:'wrong problem',output:'wrong'}]})).status,409);assert.equal(e.server.samplesFor(a).samples,undefined);
+  assert.equal((await reply({id:current.id,problem:a,samples:[{input:'new',output:'right'}]})).status,200);assert.equal(e.server.samplesFor(a).samples[0].input,'new');assert.equal(e.server.samplesFor(b).samples,undefined);
+ }finally{await e.server.close();}
+});
 test('source proof decodes HTML without executing it; identity excludes old or other-account submissions',async()=>{
  assert.equal(extractSource('<pre id="program-source-text">a &lt; b &amp;&amp; c&#10;</pre>'),'a < b && c\n');assert.equal(extractSource('<html>Login</html>'),null);assert.equal(await hashSource(source),sourceHash(source));
  const t={problem:{contestId:10,index:'A'},baseline:5,submittedAt:1000000,handle:'sample'},s={id:6,creationTimeSeconds:1000,problem:t.problem,author:{members:[{handle:'sample'}]}};assert(submissionMatches(t,s));assert(!submissionMatches(t,{...s,id:5}));assert(!submissionMatches(t,{...s,author:{members:[{handle:'other'}]}}));
