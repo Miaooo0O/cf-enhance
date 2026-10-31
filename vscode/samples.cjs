@@ -1,11 +1,15 @@
 const {spawn}=require('node:child_process');
 const fs=require('node:fs/promises');const os=require('node:os');const path=require('node:path');
-function execute(command,args,{input='',timeout=3000,maxOutput=1024*1024}={}){
+function execute(command,args,{input='',timeout=3000,maxOutput=1024*1024,signal,cwd}={}){
  return new Promise((resolve,reject)=>{
-  const child=spawn(command,args,{windowsHide:true,shell:false}),out=[],err=[];let size=0,reason=null;
-  const timer=setTimeout(()=>{reason='运行超时';child.kill();},timeout);
-  const collect=list=>chunk=>{size+=chunk.length;if(size>maxOutput){reason='输出超过 1 MiB';child.kill();}else list.push(chunk);};
-  child.stdout.on('data',collect(out));child.stderr.on('data',collect(err));child.once('error',e=>{clearTimeout(timer);reject(Error('无法启动 '+command+'：'+e.message));});child.once('close',code=>{clearTimeout(timer);resolve({code,stdout:Buffer.concat(out).toString(),stderr:Buffer.concat(err).toString(),reason});});child.stdin.on('error',()=>{});child.stdin.end(input);
+  if(signal?.aborted){resolve({code:null,stdout:'',stderr:'',reason:'已停止',timeMs:0});return;}
+  const started=Date.now(),child=spawn(command,args,{windowsHide:true,shell:false,cwd}),out=[],err=[];let size=0,reason=null,killed=false;
+  function kill(){if(killed||child.exitCode!==null||child.signalCode!==null||!Number.isSafeInteger(child.pid))return;killed=true;if(process.platform==='win32'){const killer=spawn('taskkill',['/pid',String(child.pid),'/T','/F'],{windowsHide:true,shell:false,stdio:'ignore'});killer.on('error',()=>child.kill());}else child.kill('SIGKILL');}
+  const abort=()=>{reason='已停止';kill();};signal?.addEventListener('abort',abort,{once:true});
+  const timer=setTimeout(()=>{reason='运行超时';kill();},timeout);
+  const cleanup=()=>{clearTimeout(timer);signal?.removeEventListener('abort',abort);};
+  const collect=list=>chunk=>{const remaining=Math.max(0,maxOutput-size);if(remaining)list.push(chunk.subarray(0,remaining));size+=chunk.length;if(size>maxOutput){reason='输出超过 1 MiB';kill();}};
+  child.stdout.on('data',collect(out));child.stderr.on('data',collect(err));child.once('error',e=>{cleanup();reject(Error('无法启动 '+command+'：'+e.message));});child.once('close',code=>{cleanup();resolve({code,stdout:Buffer.concat(out).toString(),stderr:Buffer.concat(err).toString(),reason,timeMs:Date.now()-started});});child.stdin.on('error',()=>{});child.stdin.end(input);
  });
 }
 const sameOutput=(a,b)=>a.replace(/\r/g,'').trimEnd()===b.replace(/\r/g,'').trimEnd();

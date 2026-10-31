@@ -14,6 +14,15 @@ async function harness(state,respond){
   return {state,calls,send:m=>new Promise(resolve=>listener(m,{id:'test-extension'},resolve)),restore:()=>{Date.now=oldNow;globalThis.setTimeout=oldTimeout;globalThis.fetch=oldFetch;globalThis.chrome=oldChrome;}};
 }
 const problem=(index,rating=1400)=>({contestId:10,index,rating,name:index,tags:['dp']});
+
+test('deleting and restoring a session preserves other sessions/history and cannot resurrect legacy data',async()=>{
+ const a={id:'a',name:'First',problems:[problem('A')],viewed:{'10/A':{first:1}}},b={id:'b',name:'Second',problems:[problem('B')],viewed:{}};const account={handle:'sample',complete:true,states:{'10/A':{solved:true}}};
+ const h=await harness({trainings:[a,b],training:a,history:['10/A'],drawLog:[{key:'10/A'}],account},()=>{throw Error('No network expected');});try{
+  const deleted=await h.send({type:'deleteSession',id:'a'});assert(deleted.ok);assert.deepEqual(deleted.data.sessions,[b]);assert.equal((await h.send({type:'sessions'})).data.length,1);assert.equal(h.state.training,null);assert.deepEqual(h.state.history,['10/A']);assert.deepEqual(h.state.account,account);assert.equal(h.state.drawLog.length,1);
+  const restored=await h.send({type:'restoreSession',id:'a'});assert(restored.ok);assert.deepEqual(restored.data.sessions,[a,b]);assert.equal(h.state.trainingTrash.length,0);assert.equal(h.calls.length,0);
+  assert.equal((await h.send({type:'deleteSession',id:'missing'})).ok,false);assert.equal(h.state.trainings.length,2);
+ }finally{h.restore();}
+});
 test('account sync reads every page, deduplicates pagination overlap and respects API rate limit',async()=>{
   const page=Array.from({length:1000},(_,i)=>({id:2000-i,problem:problem('A'),verdict:'WRONG_ANSWER'}));
   const h=await harness({},url=>url.searchParams.get('from')==='1'?page:[page[999],{id:1,problem:problem('B'),verdict:'OK'}]);

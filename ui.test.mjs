@@ -30,7 +30,7 @@ function environment(html,path,state={}){
       if(m.type==='database')data={problems:sample,time:Date.now()};
       if(m.type==='save'){await set({[m.field]:m.value});data=true;}
       if(m.type==='draw')data=sample.find(p=>`${p.contestId}/${p.index}`!==m.omitKey);if(m.type==='recent')data=[];if(m.type==='contestProblems')data=sample;
-      if(m.type==='sessions')data=readSessions(state);
+      if(m.type==='sessions')data=readSessions(state);if(m.type==='deleteSession'){const sessions=readSessions(state),removed=sessions.find(s=>s.id===m.id);data={sessions:sessions.filter(s=>s.id!==m.id),deleted:[{...removed,deletedPosition:sessions.findIndex(s=>s.id===m.id)},...(state.trainingTrash||[])]};await set({trainings:data.sessions,training:null,trainingTrash:data.deleted});}if(m.type==='restoreSession'){const removed=(state.trainingTrash||[]).find(s=>s.id===m.id),sessions=readSessions(state);sessions.splice(removed.deletedPosition,0,removed);data={sessions,deleted:state.trainingTrash.filter(s=>s.id!==m.id)};await set({trainings:data.sessions,trainingTrash:data.deleted});}
       if(m.type==='viewed'){const trainings=markViewed(readSessions(state),m.id,m.key);await set({trainings});data=trainings.find(s=>s.id===m.id);}
       if(m.type==='training'){const problems=generateTraining(sample,m.groups,{...state.settings,...m.options},state.history||[],state.account,()=>.99);data={id:'new-session',name:m.name,created:Date.now(),groups:m.groups,problems,viewed:{}};await set({trainings:[data,...readSessions(state)]});}
       return {ok:true,data};
@@ -68,6 +68,12 @@ test('independent library creates a new mixed session without replacing previous
     [...root.querySelectorAll('button')].find(b=>b.textContent==='创建场次并进入').click();await flush();assert.equal(e.state.trainings.length,2);assert.equal(e.state.trainings[0].problems.length,2);assert.equal(e.state.trainings[1].id,'old');assert(e.requests.some(r=>r.type==='navigate'&&r.url.endsWith('session=new-session')));assert.equal(root.querySelectorAll('img').length,0);
     e.window.dispatchEvent(new e.window.Event('pagehide'));
   }finally{e.restore();}
+});
+
+test('library and session details delete locally and restore through undo without clearing history',async()=>{
+ const sessions=[{id:'one',name:'First',created:1,problems:sample,viewed:{}},{id:'two',name:'Second',created:2,problems:sample,viewed:{}}];
+ const e=environment('<html><body><div id="pageContent"></div></body></html>','/problemset?cfe=training',{trainings:sessions,history:['10/A']});try{await mount();e.document.querySelector('[aria-label="删除题单 First"]').click();await flush();assert.equal(e.state.trainings.length,1);assert.deepEqual(e.state.history,['10/A']);assert(e.document.querySelector('.cfe-session-trash'));[...e.document.querySelectorAll('button')].find(b=>b.textContent==='撤销删除').click();await flush();assert.equal(e.state.trainings[0].id,'one');assert.equal(e.state.trainingTrash.length,0);e.window.dispatchEvent(new e.window.Event('pagehide'));}finally{e.restore();}
+ const d=environment('<html><body><div id="pageContent"></div></body></html>','/problemset?cfe=training&session=one',{trainings:sessions});try{await mount();[...d.document.querySelectorAll('button')].find(b=>b.textContent==='删除本场题单').click();await flush();assert.equal(d.document.querySelector('#cfe-training-page h1').textContent,'题单已删除');[...d.document.querySelectorAll('button')].find(b=>b.textContent==='恢复本场题单').click();await flush();assert.equal(d.document.querySelector('#cfe-training-page h1').textContent,'First');d.window.dispatchEvent(new d.window.Event('pagehide'));}finally{d.restore();}
 });
 test('accepted problem shows an AC card and next action omits the current problem',async()=>{
   const e=environment('<html><body><div id="pageContent"></div></body></html>','/contest/10/problem/A',{account:{handle:'sample',complete:true,states:{'10/A':{solved:true}}}});

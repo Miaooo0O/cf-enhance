@@ -1,6 +1,6 @@
-const test=require('node:test');const assert=require('node:assert/strict');const Module=require('node:module');
+const test=require('node:test');const assert=require('node:assert/strict');const Module=require('node:module');const fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path');
 test('VS Code commands pair, snapshot an arbitrary editor, select a separate target and receive feedback',async()=>{
- const commands=new Map(),persisted={},secrets=new Map();let clipboard='',source='int main(){return 0;}',provider,panel,activeChanged;
+ const commands=new Map(),persisted={},secrets=new Map();let temporary=null;let clipboard='',source='int main(){return 0;}',provider,panel,activeChanged;
  const context={subscriptions:[],globalState:{get:(k,d)=>persisted[k]??d,update:async(k,v)=>persisted[k]=v},secrets:{get:async k=>secrets.get(k),store:async(k,v)=>secrets.set(k,v),delete:async k=>secrets.delete(k)}};
  class Emitter{event=()=>{};fire(){}dispose(){}}
  const mock={EventEmitter:Emitter,StatusBarAlignment:{Right:1},ProgressLocation:{Notification:1},TreeItem:class{constructor(label){this.label=label;}},ThemeIcon:class{},Uri:{parse:s=>s},
@@ -28,5 +28,8 @@ test('VS Code commands pair, snapshot an arbitrary editor, select a separate tar
   await panel.receive({action:'submit',sourceMode:'editor',targetKey:'current:999/A',language:'cpp23'});assert.match(panel.notice,/已变化/);assert.equal(provider.getChildren().length,2);
   await panel.receive({action:'cancelTask',id:provider.getChildren()[0].id});assert.equal(provider.getChildren()[0].state,'cancelled');
   await panel.receive({action:'browse'});assert.equal(panel.getState().file.name,'chosen.py');await panel.receive({action:'submit',sourceMode:'file',targetKey:'manual',problem:'15C',language:'python3'});assert.equal(provider.getChildren()[0].source,'print(7)');assert.equal(provider.getChildren()[0].sourceName,'chosen.py');
- }finally{Module._load=original;for(const d of context.subscriptions)d.dispose?.();await extension?.deactivate();}
+  await commands.get('cfEnhance.disconnect')();temporary=await fs.mkdtemp(path.join(os.tmpdir(),'cfe-host-'));const filename=path.join(temporary,'free.cpp');await fs.writeFile(filename,'original disk contents');source='#include <iostream>\nint main(){int x;std::cin>>x;std::cout<<x*2;}';const document={fileName:filename,uri:{toString:()=>filename},languageId:'cpp',version:1,getText:()=>source};activeChanged({document,selection:{isEmpty:true}});
+  let local=panel.getState().judge.editor;await panel.receive({action:'editCase',suiteKey:local.key,id:local.cases[0].id,patch:{input:'41',expected:'82',compare:true}});await panel.receive({action:'runTests',suiteKey:local.key,sourceMode:'editor'});local=panel.getState().judge.editor;assert.equal(local.results[0].status,'passed');assert.equal(panel.getState().connected,false);assert.equal(await fs.readFile(filename,'utf8'),'original disk contents');
+  document.version++;assert.equal(panel.getState().judge.editor.stale,true);const running=panel.receive({action:'runTests',suiteKey:local.key,sourceMode:'editor'});await new Promise(setImmediate);await panel.receive({action:'stopTests'});await running;assert.equal(panel.getState().judge.running,false);assert.match(panel.notice,/停止/);
+ }finally{Module._load=original;for(const d of context.subscriptions)d.dispose?.();await extension?.deactivate();if(temporary)await fs.rm(temporary,{recursive:true,force:true});}
 });

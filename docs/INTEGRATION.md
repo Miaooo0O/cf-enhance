@@ -8,7 +8,8 @@
 - vscode/extension.cjs / controller.cjs：可视面板控制器、实时编辑器与选区、文件选择、提交快照、任务树与判题提示。
 - vscode/panel.cjs / media/：原生主题侧栏 Webview，CSP 限制为本地资源，元数据使用 textContent 渲染；动作白名单、串行处理，代码与认证凭据不传入 Webview。
 - vscode/ports.cjs：系统分配空闲端口，工作区记忆、重启优先复用、EADDRINUSE 自动换端口；旧默认端口迁移。
-- vscode/cph.cjs：按本机 CPH .prob 文件标识与用例格式兼容导入，支持配置目录、追加去重、原子写入、保留手写用例和选项；编辑器切换刷新 CPH，不运行代码或重载其他 Webview。
+- vscode/judge-store.cjs：按文件保存用例，导入去重、保留手写修改与版本校验。
+- vscode/judge-runner.cjs / media/judge.js：离线 C/C++/Python 评测、输入输出编辑、单例/批量运行、停止、结果及陈旧标记。
 - vscode/samples.cjs：经用户确认，在临时目录编译 C++ 快照并运行网页样例。
 - bridge-worker.mjs：本机连接、任务投递、CF 源码摘要核对、编号绑定和结果反馈。
 - companion.mjs：当前题与样例同步、原生提交表单填入、原生结果行读取。
@@ -41,6 +42,10 @@ Chrome 的本机访问权限为可选权限，仅用户点击连接后申请。�
 
 已实现从 VS Code 一键自动提交与反馈、从场次选题、打开网页题目、C++ 本地样例测试。没有正式比赛倒计时切题、VS Code 题面翻译或云同步。
 
-65 项自动化测试包含真实 loopback HTTP、VS Code API 模拟命令与可视提交、面板脚本交互、端口冲突恢复、身份与源码核对、歧义提交绑定、原生表单适配及实际 C++ 编译运行。没有在用户账号上代提交，也没有通过 Chrome/VS Code 真机安装验收。
+72 项自动化测试包含真实 loopback HTTP、VS Code API 模拟命令与可视提交、面板脚本交互、端口冲突恢复、身份与源码核对、歧义提交绑定、原生表单适配及实际 C++ 编译运行。没有在用户账号上代提交，也没有通过 Chrome/VS Code 真机安装验收。
 
 提交页“我的提交”基线请求限时 6 秒，不等待公共 API。自动新建标签页允许替换站点恢复的旧代码，手动编辑或恢复已有标签页仍保护草稿。45 秒未准备、60 秒未取得编号时提示具体状态，不自动重复发送。导航上下文按标签页保存，AC 后随机和有序前进相互独立。
+
+Companion 0.5.0 默认打开本地测试页，提交位于独立页签。本地动作不等待浏览器连接。用例保存在工作区 Memento，编译使用临时目录和代码快照，不覆盖源文件。Windows 停止时只终止本次拥有的进程树。修改用例按 revision 隐藏旧结果，修改代码按 document.version 标记旧结果。
+
+Chrome 3.3.0 新增题单软删除：canonical trainings 与 trainingTrash 同步更新并清理 legacy training，防止删除后旧版本迁移复活。撤销恢复原顺序、分组与看题记录；不修改 history/drawLog/account。

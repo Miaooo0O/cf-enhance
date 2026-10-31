@@ -56,6 +56,12 @@ async function handleMessage(m){
     const stored=await chrome.storage.local.get(['trainings','training']);const trainings=readSessions(stored);
     return trainings;
   }
+  if(m.type==='deleteSession'||m.type==='restoreSession'){
+    const id=String(m.id||'');if(!id||id.length>128)throw Error('题单编号无效');const stored=await chrome.storage.local.get(['trainings','training','trainingTrash']);let sessions=readSessions(stored),deleted=stored.trainingTrash||[];
+    if(m.type==='deleteSession'){const position=sessions.findIndex(s=>String(s.id)===id);if(position<0){if(!deleted.some(s=>String(s.id)===id))throw Error('题单不存在');}else{const removed=sessions[position];sessions=sessions.filter(s=>String(s.id)!==id);deleted=[{...removed,deletedAt:Date.now(),deletedPosition:position},...deleted.filter(s=>String(s.id)!==id)];}}
+    else {const archived=deleted.find(s=>String(s.id)===id);if(!sessions.some(s=>String(s.id)===id)){if(!archived)throw Error('无法找到已删除的题单');const {deletedAt,deletedPosition,...restored}=archived;sessions.splice(Math.min(Math.max(0,deletedPosition||0),sessions.length),0,restored);}deleted=deleted.filter(s=>String(s.id)!==id);}
+    await chrome.storage.local.set({trainings:sessions,training:null,trainingTrash:deleted});return {sessions,deleted};
+  }
   if(m.type==='viewed'){
     const stored=await chrome.storage.local.get(['trainings','training']);
     const trainings=markViewed(readSessions(stored),m.id,m.key);await chrome.storage.local.set({trainings});return trainings.find(s=>String(s.id)===String(m.id));

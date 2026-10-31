@@ -1,13 +1,14 @@
 {
   "name": "cf-enhance-companion",
-  "displayName": "CF Enhance Companion",
-  "description": "CF Enhance 的可选 VS Code 联动：自由选择代码、目标题目与语言，接收提交反馈。",
-  "version": "0.4.0",
+  "displayName": "CF Enhance · 本地评测与提交",
+  "description": "精简的本地评测：自定义输入输出、CF 样例同步、逐例或批量运行，以及网页提交反馈。",
+  "version": "0.5.0",
   "publisher": "Miaooo0O",
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
+    "Testing",
     "Other"
   ],
   "extensionKind": [
@@ -32,8 +33,8 @@
     "commands": [
       {
         "command": "cfEnhance.show",
-        "title": "CF Enhance: 打开提交面板",
-        "icon": "$(send)"
+        "title": "CF Enhance: 打开测试与提交面板",
+        "icon": "$(beaker)"
       },
       {
         "command": "cfEnhance.pair",
@@ -72,7 +73,7 @@
       "cfEnhance": [
         {
           "id": "cfEnhance.control",
-          "name": "提交面板",
+          "name": "测试与提交",
           "type": "webview"
         },
         {
@@ -104,6 +105,36 @@
           "type": "string",
           "default": "g++",
           "description": "本地样例测试使用的 C++ 编译器程序路径（不含额外参数）。"
+        },
+        "cfEnhance.cCompiler": {
+          "type": "string",
+          "default": "gcc",
+          "description": "C 本地测试编译器程序路径，不含额外参数。"
+        },
+        "cfEnhance.python": {
+          "type": "string",
+          "default": "python",
+          "description": "Python 本地测试解释器程序路径，不含额外参数。"
+        },
+        "cfEnhance.testTimeout": {
+          "type": "integer",
+          "default": 3000,
+          "minimum": 100,
+          "maximum": 30000,
+          "description": "每个用例的本地运行时限（毫秒），编译限时 30 秒。"
+        },
+        "cfEnhance.outputComparison": {
+          "type": "string",
+          "enum": [
+            "tokens",
+            "exact"
+          ],
+          "default": "tokens",
+          "enumDescriptions": [
+            "按空白分隔后的内容逐项比较",
+            "保留内部空白，只忽略行尾格式与末尾空白"
+          ],
+          "description": "本地测试的输出比较方式。"
         }
       }
     },

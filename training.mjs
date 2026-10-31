@@ -19,20 +19,21 @@ export async function mountTrainingPage({content,root}){
   const view=el('section',{id:'cfe-training-page'});content.replaceChildren(root,view);
   const sidebar=document.querySelector('#sidebar');if(sidebar)sidebar.hidden=true;
   const params=new URL(location.href).searchParams,selectedId=params.get('session');
-  let sessions=await request('sessions');const stored=await getLocal(['account','preferences','settings']);let account=stored.account,chinese=!!stored.preferences?.chinese;
+  let sessions=await request('sessions');const stored=await getLocal(['account','preferences','settings','trainingTrash']);let deleted=stored.trainingTrash||[],account=stored.account,chinese=!!stored.preferences?.chinese;
   let selected=sessions.find(s=>String(s.id)===selectedId);
   const nav=el('div',{class:'cfe-session-nav'});nav.append(link('题单 / 全部场次',libraryUrl()));if(selected)nav.append(el('span',{},' » '+selected.name));view.append(nav);
   const heading=el('h1',{},selected?.name||'我的训练场次');view.append(heading);
   const info=el('p',{role:'status','aria-live':'polite',class:'cfe-session-note'});view.append(info);
-  if(selectedId&&!selected){info.textContent='这场训练不存在或尚未保存在当前浏览器。';return true;}
+  if(selectedId&&!selected)info.textContent='这场训练不存在或已被删除。';
+  async function changeSession(id,restore=false){const name=(restore?deleted:sessions).find(s=>String(s.id)===String(id))?.name||'题单';info.textContent=restore?'正在恢复…':'正在删除…';try{const result=await request(restore?'restoreSession':'deleteSession',{id});sessions=result.sessions;deleted=result.deleted;render();info.replaceChildren(document.createTextNode((restore?'已恢复':'已删除')+'「'+name+'」。'));if(!restore){const undo=button('撤销删除',()=>{void changeSession(id,true);});undo.className='cfe-session-restore';info.append(undo);}}catch(e){info.textContent=e.message;}}
   const accountBar=el('div',{class:'cfe-session-controls'}),handle=el('input',{placeholder:'CF handle','aria-label':'CF handle',value:account?.handle||''});
   const sync=button('同步做题状态',async()=>{sync.disabled=true;info.textContent='正在同步完整提交记录…';try{account=await request('sync',{handle:handle.value.trim(),force:true});render();info.textContent='做题状态已更新。';}catch(e){info.textContent=e.message;}finally{sync.disabled=false;}});accountBar.append(handle,sync);view.append(accountBar);
   const output=el('div',{id:'cfe-session-output'});
-  let search,filter;
-  if(selected){
-    const controls=el('div',{class:'cfe-session-controls'});search=el('input',{type:'search',placeholder:'搜索本场题目','aria-label':'搜索本场题目'});filter=el('select',{'aria-label':'筛选本场状态'});
+  let search,filter,detailControls;
+  if(selectedId){
+    const controls=el('div',{class:'cfe-session-controls'});detailControls=controls;search=el('input',{type:'search',placeholder:'搜索本场题目','aria-label':'搜索本场题目'});filter=el('select',{'aria-label':'筛选本场状态'});
     for(const [value,title]of [['all','全部题目'],['unviewed','未看过'],['viewed','已看过'],['new','未提交'],['tried','尝试中'],['ac','已通过']])filter.append(el('option',{value},title));
-    search.oninput=render;filter.onchange=render;controls.append(search,filter);view.append(controls);
+    search.oninput=render;filter.onchange=render;const remove=button('删除本场题单',()=>{void changeSession(selectedId);});remove.className='cfe-session-delete';controls.append(search,filter,remove);view.append(controls);
   }else{
     const builder=el('details',{class:'cfe-session-builder'});builder.open=!sessions.length;builder.append(el('summary',{},'创建新场次'));view.append(builder);
     const name=el('input',{placeholder:'场次名称',maxlength:'80',value:'我的训练'}),nameLabel=el('label',{},'场次名称 ');nameLabel.append(name);builder.append(nameLabel);
@@ -63,7 +64,7 @@ export async function mountTrainingPage({content,root}){
   }
   view.append(output);
   function render(){
-    selected=sessions.find(s=>String(s.id)===selectedId);output.replaceChildren();
+    selected=sessions.find(s=>String(s.id)===selectedId);output.replaceChildren();if(detailControls)detailControls.hidden=!!selectedId&&!selected;if(selectedId&&!selected){heading.textContent=deleted.some(s=>String(s.id)===selectedId)?'题单已删除':'找不到题单';output.append(note('这场题单不存在或已删除，跳题记录和 CF 做题状态仍保留。'),link('返回题单列表',libraryUrl()));if(deleted.some(s=>String(s.id)===selectedId))output.append(button('恢复本场题单',()=>{void changeSession(selectedId,true);}));return;}
     if(selected){
       const progress=sessionProgress(selected,account);document.title=selected.name+' · 训练场次';heading.textContent=selected.name;
       output.append(note(`${progress.total} 道题 · 已看 ${progress.viewed} · AC ${progress.solved} · ${account?.handle?'做题账号 '+account.handle:'未同步账号，做题状态未知'} · 创建于 ${new Date(selected.created).toLocaleString('zh-CN')}`));
@@ -76,11 +77,11 @@ export async function mountTrainingPage({content,root}){
         row.append(cell(alias(i)),title,rating,tags,cell(s.viewed?'已看':'未看'),cell(stateNames[s.state]),cell(verdictNames[account?.states?.[key(p)]?.verdict]||account?.states?.[key(p)]?.verdict||'—'));body.append(row);
       });output.append(t);if(!body.children.length)output.append(note('没有符合筛选条件的题目。'));
     }else{
-      const {table:t,body}=table(['场次','题数','已看','AC','创建时间']);for(const s of sessions){const p=sessionProgress(s,account),title=cell();title.append(link(s.name,sessionUrl(s.id)));const row=el('tr');row.append(title,cell(String(p.total)),cell(String(p.viewed)),cell(account?String(p.solved):'未同步'),cell(new Date(s.created).toLocaleString('zh-CN')));body.append(row);}output.append(t);if(!sessions.length)output.append(note('还没有训练场次，创建后会一直保存在这里。'));
+      const {table:t,body}=table(['场次','题数','已看','AC','创建时间','操作']);for(const s of sessions){const p=sessionProgress(s,account),title=cell();title.append(link(s.name,sessionUrl(s.id)));const row=el('tr');row.append(title,cell(String(p.total)),cell(String(p.viewed)),cell(account?String(p.solved):'未同步'),cell(new Date(s.created).toLocaleString('zh-CN')));const actions=cell(),remove=button('删除',()=>{void changeSession(s.id);});remove.className='cfe-session-delete';remove.setAttribute('aria-label','删除题单 '+s.name);actions.append(remove);row.append(actions);body.append(row);}output.append(t);if(!sessions.length)output.append(note('还没有训练场次，创建后会一直保存在这里。'));if(deleted.length){const trash=el('details',{class:'cfe-session-trash'});trash.append(el('summary',{},'已删除题单（'+deleted.length+'）'));for(const s of deleted){const row=el('div',{class:'cfe-session-trash-row'}),restore=button('恢复',()=>{void changeSession(s.id,true);});restore.className='cfe-session-restore';row.append(el('span',{},s.name),restore);trash.append(row);}output.append(trash);}
     }
   }
   render();
-  const onChange=(changes,area)=>{if(area!=='local')return;if(changes.account)account=changes.account.newValue;if(changes.trainings)sessions=changes.trainings.newValue||[];if(changes.preferences)chinese=!!changes.preferences.newValue?.chinese;if(changes.account||changes.trainings||changes.preferences)render();};const unlisten=listenStorage(onChange);window.addEventListener('pagehide',unlisten,{once:true});
+  const onChange=(changes,area)=>{if(area!=='local')return;if(changes.account)account=changes.account.newValue;if(changes.trainings)sessions=changes.trainings.newValue||[];if(changes.trainingTrash)deleted=changes.trainingTrash.newValue||[];if(changes.preferences)chinese=!!changes.preferences.newValue?.chinese;if(changes.account||changes.trainings||changes.trainingTrash||changes.preferences)render();};const unlisten=listenStorage(onChange);window.addEventListener('pagehide',unlisten,{once:true});
   return true;
 }
 
@@ -90,6 +91,6 @@ export async function mountSessionContext(problem,id){
   let current=await request('viewed',{id,key:key(problem)}),account=(await getLocal('account')).account;
   const box=el('div',{id:'cfe-session-sidebar',class:'roundbox'}),caption=el('div',{class:'caption titled'},'→ 本场训练'),body=el('div',{class:'cfe-session-sidebody'});box.append(caption,body);
   const sidebar=document.getElementById('sidebar');if(sidebar)sidebar.prepend(box);else document.getElementById('cfe-root')?.after(box);
-  function render(){body.replaceChildren(link(current.name,sessionUrl(id)));const p=sessionProgress(current,account);body.append(note(`已看 ${p.viewed}/${p.total} · AC ${p.solved}/${p.total}`));const list=el('ol');current.problems.forEach((p,i)=>{const s=sessionState(current,p,account),li=el('li');if(key(p)===key(problem))li.className='cfe-session-current';li.append(link(`${alias(i)}. ${p.name}`,sessionProblemUrl(id,p)),el('small',{},` ${s.viewed?'已看':'未看'} · ${stateNames[s.state]}`));list.append(li);});body.append(list,link('返回本场 / 自由选题',sessionUrl(id)));}render();
-  const listener=(changes,area)=>{if(area!=='local')return;if(changes.account)account=changes.account.newValue;if(changes.trainings)current=changes.trainings.newValue?.find(s=>String(s.id)===String(id))||current;if(changes.account||changes.trainings)render();};const unlisten=listenStorage(listener);window.addEventListener('pagehide',unlisten,{once:true});
+  function render(){if(!current){body.replaceChildren(note('本场题单已删除'),link('返回题单列表',libraryUrl()));return;}body.replaceChildren(link(current.name,sessionUrl(id)));const p=sessionProgress(current,account);body.append(note(`已看 ${p.viewed}/${p.total} · AC ${p.solved}/${p.total}`));const list=el('ol');current.problems.forEach((p,i)=>{const s=sessionState(current,p,account),li=el('li');if(key(p)===key(problem))li.className='cfe-session-current';li.append(link(`${alias(i)}. ${p.name}`,sessionProblemUrl(id,p)),el('small',{},` ${s.viewed?'已看':'未看'} · ${stateNames[s.state]}`));list.append(li);});body.append(list,link('返回本场 / 自由选题',sessionUrl(id)));}render();
+  const listener=(changes,area)=>{if(area!=='local')return;if(changes.account)account=changes.account.newValue;if(changes.trainings)current=changes.trainings.newValue?.find(s=>String(s.id)===String(id))||null;if(changes.account||changes.trainings)render();};const unlisten=listenStorage(listener);window.addEventListener('pagehide',unlisten,{once:true});
 }

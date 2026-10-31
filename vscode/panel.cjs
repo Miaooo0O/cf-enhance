@@ -5,6 +5,7 @@ function panelHtml(webview,extensionUri){
  return fs.readFileSync(path.join(__dirname,'media','panel.html'),'utf8')
   .replaceAll('{{CSP}}',webview.cspSource).replaceAll('{{NONCE}}',nonce)
   .replaceAll('{{STYLE}}',String(webview.asWebviewUri(vscode.Uri.joinPath(root,'panel.css'))))
+  .replaceAll('{{JUDGE}}',String(webview.asWebviewUri(vscode.Uri.joinPath(root,'judge.js'))))
   .replaceAll('{{SCRIPT}}',String(webview.asWebviewUri(vscode.Uri.joinPath(root,'panel.js'))));
 }
 class PanelProvider{
@@ -18,14 +19,15 @@ class PanelProvider{
   this.publish(true);
  }
  async receive(message){
-  const allowed=new Set(['ready','refresh','pair','disconnect','browse','submit','samples','importCph','openProblem','viewTask','cancelTask','showOutput']);
+  const allowed=new Set(['ready','refresh','pair','disconnect','browse','submit','samples','openProblem','addCase','editCase','deleteCase','syncSamples','runTests','stopTests','openSettings','viewTask','cancelTask','showOutput']);
   if(!message||typeof message!=='object'||!allowed.has(message.action))return;
   if(message.action==='ready'||message.action==='refresh'){this.publish(true);return;}
+  if(message.action==='editCase'||message.action==='stopTests'){try{const notice=await this.act(message);if(notice)this.notice=notice;}catch(e){this.notice=e.message;}this.publish();return;}
   if(this.busy)return;this.busy=true;this.notice='';this.publish(true);
   try{this.notice=await this.act(message)||'';}catch(e){this.notice=e.message||String(e);}finally{this.busy=false;this.publish(true);}
  }
  publish(force=false){const state={...this.getState(),busy:this.busy,notice:this.notice};const json=JSON.stringify(state);
-  for(const view of this.views){if(view.visible===false)continue;if(!force&&this.last.get(view)===json)continue;this.last.set(view,json);void view.webview.postMessage({type:'state',state});}
+  for(const view of this.views){if(view.visible===false)continue;if(!force&&this.last.get(view)===json)continue;this.last.set(view,json);void Promise.resolve(view.webview.postMessage({type:'state',state})).catch(()=>{});}
  }
  reveal(){for(const view of this.views)view.show?.(true);}
 }
