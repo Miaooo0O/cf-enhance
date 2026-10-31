@@ -23,12 +23,13 @@ class Bridge {
  notify(){this.onChange(this.tasks.map(publicTask));}
  issuePairing(){this.pairCode=randomBytes(24).toString('base64url');this.pairExpires=this.now()+300000;return `cfe-pair:${this.port}:${this.pairCode}`;}
  async revoke(){this.credentials=null;this.pairCode=null;this.lastSeen=0;await this.saveCredentials(null);this.notify();}
- createTask({source,sourceName,problem,language,sessionId=null}){
+ createTask({source,sourceName,problem,language,sessionId=null,autoSubmit=false}){
   if(typeof source!=='string'||!source.trim()||Buffer.byteLength(source)>MAX_SOURCE)throw Error('代码不能为空，且最多 1 MiB。');
   if(!validProblem(problem))throw Error('目标题目无效。');
   if(!['cpp23','cpp20','cpp17','python3','pypy3','java21','rust','manual'].includes(language))throw Error('语言无效。');
   if(this.tasks.filter(t=>!terminal.has(t.state)).length>=20)throw Error('未完成任务最多 20 个，请先取消或完成旧任务。');
-  const task={id:randomUUID(),created:this.now(),source,sourceName:String(sourceName).slice(0,200),problem,language,sessionId,hash:sourceHash(source),state:'queued',detail:'等待浏览器领取代码快照'};
+  if(autoSubmit&&this.tasks.some(t=>['queued','opened','prepared','submitted','judging'].includes(t.state)&&t.autoSubmit&&t.problem.contestId===problem.contestId&&t.problem.index===problem.index&&t.language===language&&t.hash===sourceHash(source)))throw Error('相同代码和题目的提交正在处理中，请等待结果。');
+  const task={id:randomUUID(),created:this.now(),source,sourceName:String(sourceName).slice(0,200),problem,language,sessionId,autoSubmit:!!autoSubmit,hash:sourceHash(source),state:'queued',detail:'等待浏览器领取代码快照'};
   this.tasks.unshift(task);this.notify();return publicTask(task);
  }
  cancel(id){const t=this.tasks.find(t=>t.id===id);if(t&&!terminal.has(t.state)){t.state='cancelled';t.detail='已取消跟踪；已经发送给 CF 的提交不会撤回';delete t.source;this.notify();}}
@@ -56,7 +57,7 @@ class Bridge {
   }
   this.lastSeen=this.now();
   if(req.url==='/poll'){
-   if(body.context)this.context={problem:validProblem(body.context.problem)?body.context.problem:this.context.problem,handle:String(body.context.handle||'').slice(0,24),sessions:Array.isArray(body.context.sessions)?body.context.sessions.slice(0,20):[],samples:Array.isArray(body.context.samples)?body.context.samples.slice(0,20):[],updated:this.now()};
+   if(body.context)this.context={problem:validProblem(body.context.problem)?body.context.problem:this.context.problem,handle:String(body.context.handle||'').slice(0,24),sessions:Array.isArray(body.context.sessions)?body.context.sessions.slice(0,20):[],samples:Array.isArray(body.context.samples)?body.context.samples.slice(0,20):[],autoSubmit:body.context.autoSubmit===true,updated:this.now()};
    for(const t of this.tasks)if(!terminal.has(t.state)&&this.now()-t.created>86400000){t.state='expired';delete t.source;}
    const task=this.tasks.find(t=>['queued','opened'].includes(t.state)&&t.source);return this.reply(res,200,{task:task?structuredClone(task):null,commands:this.commands.splice(0),cancelled:this.tasks.filter(t=>terminal.has(t.state)).map(t=>t.id)});
   }

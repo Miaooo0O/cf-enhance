@@ -16,7 +16,7 @@ test('VS Code commands pair, snapshot an arbitrary editor, select a separate tar
  const original=Module._load;Module._load=function(name,...args){return name==='vscode'?mock:original.call(this,name,...args);};let extension;
  try{extension=require('./extension.cjs');await extension.activate(context);await commands.get('cfEnhance.pair')();
   const [,port,code]=clipboard.split(':'),client='a'.repeat(32);const call=async(path,data,token)=>{const r=await fetch(`http://127.0.0.1:${port}${path}`,{method:'POST',headers:{'Content-Type':'application/json','X-CFE-Client':client,...(token?{Authorization:`Bearer ${token}`}:{})},body:JSON.stringify(data)});return r.json();};
-  const {token}=await call('/pair',{extensionId:client,code});await commands.get('cfEnhance.submit')();
+  const {token}=await call('/pair',{extensionId:client,code});await call('/poll',{context:{autoSubmit:true}},token);await commands.get('cfEnhance.submit')();
   const [task]=provider.getChildren();assert.equal(task.sourceName,'anything.cpp');assert.deepEqual(task.problem,{contestId:10,index:'A'});assert.equal(task.source,'int main(){return 0;}');
   for(const state of ['opened','prepared','submitted'])await call('/event',{id:task.id,type:'state',state},token);
   await call('/event',{id:task.id,type:'bound',submissionId:99,handle:'sample'},token);await call('/event',{id:task.id,type:'verdict',submissionId:99,verdict:'OK'},token);

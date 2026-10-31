@@ -7,28 +7,32 @@
  function selection(){return {sourceMode:$('source').value,targetKey:$('target').value,problem:$('problem').value,language:$('language').value};}
  for(const id of ['pair','disconnect','browse','refresh','showOutput'])$(id).onclick=()=>send(id);
  $('browse').onclick=()=>{pickingFile=true;send('browse');};
+ $('importCph').onclick=()=>send('importCph',selection());
  $('submit').onclick=()=>{save();send('submit',selection());};$('samples').onclick=()=>send('samples',selection());$('openProblem').onclick=()=>send('openProblem',selection());
  for(const id of ['source','target','problem','language'])$(id).addEventListener('input',()=>{if(id==='target'||id==='problem')targetTouched=true;if(id==='language')languageTouched=true;save();autoLanguage();updateControls();});
- function autoLanguage(){const source=$('source').value==='file'?state.file:state.editor;if(!languageTouched&&source?.languageId&&lastEditor!==source.uri){$('language').value=({cpp:'cpp23',c:'cpp23',python:'python3',java:'java21',rust:'rust'})[source.languageId]||'manual';lastEditor=source.uri;}}
+ function autoLanguage(){const source=$('source').value==='file'?state.file:state.editor;if(!languageTouched&&source?.languageId&&lastEditor!==source.uri){$('language').value=({cpp:'cpp23',c:'cpp23',python:'python3',java:'java21',rust:'rust'})[source.languageId]||'cpp23';lastEditor=source.uri;}}
  function updateControls(){
   $('manualLabel').hidden=$('target').value!=='manual';
   const source=$('source').value==='file'?state.file:state.editor,available=!!source&&($('source').value!=='selection'||source.selectionCharacters>0);
-  $('sourceName').textContent=source?.name||'尚未选择代码文件';$('sourceInfo').textContent=source?`${source.description||''} · ${$('source').value==='selection'?source.selectionCharacters:source.characters} 字符${source.dirty?' · 未保存':''}`:'打开代码文件，或点“选择其他文件”。';
+  $('sourceName').textContent=(source?.name||'未打开代码文件')+(source?.dirty?' •':'');$('sourceInfo').textContent=source?`${source.description||''} · ${$('source').value==='selection'?source.selectionCharacters:source.characters} 字符${source.dirty?' · 未保存':''}`:'打开代码文件，或点“选择其他文件”。';
+  $('sourceName').title=source?.description||'';
   $('selectionInfo').textContent=state.editor?.selectionCharacters?`${state.editor.selectionCharacters} 字符已选中`:'';
   $('submit').disabled=busy||!state.connected||!available||($('target').value==='manual'&&!$('problem').value.trim());
+  $('importCph').textContent=state.currentProblem?`导入 CPH · ${state.currentProblem.contestId}${state.currentProblem.index}`:'导入 CPH';
+  $('importCph').disabled=busy||!available||!state.sampleCount||!state.trusted||!state.cphInstalled;$('importCph').title=state.cphInstalled?'把网页当前题样例追加到选定代码文件的 CPH，保留已有用例':'需要安装 CPH 插件';
   $('samples').disabled=busy||!available||!state.sampleCount||!state.trusted;
   $('targetHint').textContent=state.currentProblem?`网页：${state.currentProblem.contestId}${state.currentProblem.index}`:'在 Chrome 打开题目后会自动识别';
   for(const id of ['pair','browse','disconnect','openProblem'])$(id).disabled=busy||!state.trusted;
-  $('submit').textContent=busy?'处理中…':'准备提交 →';
+  $('submit').textContent=busy?'发送中…':'提交';
  }
  const elem=(tag,text)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n;};
  function actionButton(title,action,id){const b=elem('button',title);b.type='button';b.className='textButton';b.onclick=()=>send(action,{id});return b;}
  function renderTasks(){const root=$('tasks');root.replaceChildren();if(!state.tasks?.length){root.append(elem('p','这里会显示本次提交的进度和结果。'));return;}
-  for(const task of state.tasks.slice(0,12)){const row=elem('article');row.className='task';const top=elem('div');top.className='taskTop';const result=elem('span',task.result);result.className='result'+(task.verdict==='OK'?' ac':'');top.append(elem('strong',`${task.problem.contestId}${task.problem.index}`),result);row.append(top,elem('p',task.sourceName),elem('p',task.detail));if(task.submissionId)row.append(elem('p',`#${task.submissionId} · ${task.timeMs||0} ms · ${Math.round((task.memoryBytes||0)/1024)} KB`));const actions=elem('div');actions.className='taskActions';actions.append(actionButton('查看网页 ↗','viewTask',task.id));if(!task.terminal)actions.append(actionButton('停止跟踪','cancelTask',task.id));row.append(actions);root.append(row);}
+  for(const task of state.tasks.slice(0,3)){const row=elem('article');row.className='task';const top=elem('div');top.className='taskTop';const result=elem('span',task.result);result.className='result'+(task.verdict==='OK'?' ac':'');top.append(elem('strong',`${task.problem.contestId}${task.problem.index}`),result);row.append(top);row.title=task.sourceName+' · '+task.detail;if(task.state==='error')row.append(elem('p',task.detail));if(task.submissionId)row.append(elem('p',`#${task.submissionId} · ${task.timeMs||0} ms · ${Math.round((task.memoryBytes||0)/1024)} KB`));const actions=elem('div');actions.className='taskActions';actions.append(actionButton('查看网页 ↗','viewTask',task.id));if(!task.terminal)actions.append(actionButton('停止跟踪','cancelTask',task.id));row.append(actions);root.append(row);}
  }
  function renderSamples(){const samples=state.sampleResults;$('sampleSection').hidden=!samples;if(!samples)return;$('sampleSummary').textContent=`${state.sampleProblem||''} · 通过 ${samples.filter(s=>s.passed).length}/${samples.length}`;$('sampleResults').replaceChildren();for(const s of samples){const details=elem('details');details.className='sample';details.append(elem('summary',`样例 ${s.sample} · ${s.passed?'通过':s.reason||'未通过'}`),elem('pre',`实际输出\n${s.stdout}\n期望输出\n${s.expected}${s.stderr?'\n错误输出\n'+s.stderr:''}`));$('sampleResults').append(details);}}
  window.addEventListener('message',event=>{if(event.data?.type!=='state')return;state=event.data.state||{};busy=!!state.busy;
-  $('connection').textContent=state.connected?'已连接':'未连接';$('connection').className='badge'+(state.connected?' connected':'');$('connectionTitle').textContent=state.connected?'浏览器已连接':state.paired?'等待浏览器连接':'连接浏览器';$('connectionHint').textContent=state.connected?'选好代码和题目，即可准备提交。':state.paired?'保持 Chrome 的 CF 页面打开；连接失败可重新复制配对码。':'点右侧复制配对码，到 Chrome 插件弹窗粘贴一次。';$('pair').textContent=state.paired?'重新配对':'复制配对码';$('portInfo').textContent=state.port?`系统分配的本机端口：${state.port}，仅本机可访问。`:'等待初始化本机连接';$('notice').textContent=state.notice||(!state.trusted?'请先信任当前工作区。':'');
+  $('connection').textContent=state.connected?'已连接':'未连接';$('connection').className='badge'+(state.connected?' connected':'');$('connectionTitle').textContent='连接设置';$('connectionHint').textContent=state.paired?'保持 Chrome 的 CF 页面打开。':'复制配对码，到 Chrome 插件弹窗粘贴连接。';$('connectionDetails').open=!state.connected;$('pair').textContent=state.paired?'重新配对':'复制配对码';$('portInfo').textContent=state.port?`系统分配的本机端口：${state.port}，仅本机可访问。`:'等待初始化本机连接';$('notice').textContent=state.notice||(!state.trusted?'请先信任当前工作区。':'');
   const prior=$('target').value||saved.target;$('target').replaceChildren();for(const t of state.targets||[]){const option=elem('option',t.label);option.value=t.key;$('target').append(option);}
   if((state.targets||[]).some(t=>t.key===prior))$('target').value=prior;else $('target').value='manual';
   if(!targetTouched&&state.currentProblem){const key=`current:${state.currentProblem.contestId}/${state.currentProblem.index}`;if((state.targets||[]).some(t=>t.key===key))$('target').value=key;}

@@ -18,7 +18,7 @@ class PanelProvider{
   this.publish(true);
  }
  async receive(message){
-  const allowed=new Set(['ready','refresh','pair','disconnect','browse','submit','samples','openProblem','viewTask','cancelTask','showOutput']);
+  const allowed=new Set(['ready','refresh','pair','disconnect','browse','submit','samples','importCph','openProblem','viewTask','cancelTask','showOutput']);
   if(!message||typeof message!=='object'||!allowed.has(message.action))return;
   if(message.action==='ready'||message.action==='refresh'){this.publish(true);return;}
   if(this.busy)return;this.busy=true;this.notice='';this.publish(true);

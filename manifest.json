@@ -1,15 +1,84 @@
 {
   "manifest_version": 3,
   "name": "CF Enhance · Codeforces 增强",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "minimum_chrome_version": "120",
   "description": "融入 CF 原网页的随机跳题、AC 状态、刷题记录、盲刷显示与混合自组训练工具。",
-  "permissions": ["storage", "alarms"],
-  "optional_host_permissions": ["http://127.0.0.1/*"],
-  "host_permissions": ["https://codeforces.com/*"],
-  "background": { "service_worker": "background.mjs", "type": "module" },
-  "icons": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
-  "action": { "default_popup": "popup.html", "default_title": "CF Enhance · 随机跳题与刷题记录", "default_icon": { "16": "icons/icon16.png", "32": "icons/icon32.png" } },
-  "content_scripts": [{"matches":["https://codeforces.com/*"],"js":["editor-adapter.js"],"world":"MAIN","run_at":"document_start"},{ "matches": ["https://codeforces.com/*"], "js": ["homepage.js", "submit-helper.js", "companion-entry.js"], "css": ["enhance.css"], "run_at": "document_idle" }],
-  "web_accessible_resources": [{ "resources": ["popup.html", "popup.css", "popup.mjs", "core.mjs", "client.mjs", "model.mjs", "enhance.mjs", "i18n.mjs", "tags.mjs", "training.mjs", "sessions.mjs", "bridge-popup.mjs", "bridge-protocol.mjs", "companion.mjs"], "matches": ["https://codeforces.com/*"] }]
+  "permissions": [
+    "storage",
+    "alarms"
+  ],
+  "optional_host_permissions": [
+    "http://127.0.0.1/*"
+  ],
+  "host_permissions": [
+    "https://codeforces.com/*"
+  ],
+  "background": {
+    "service_worker": "background.mjs",
+    "type": "module"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "CF Enhance · 随机跳题与刷题记录",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://codeforces.com/*"
+      ],
+      "js": [
+        "editor-adapter.js"
+      ],
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://codeforces.com/*"
+      ],
+      "js": [
+        "homepage.js",
+        "submit-helper.js",
+        "companion-entry.js"
+      ],
+      "css": [
+        "enhance.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "popup.html",
+        "popup.css",
+        "popup.mjs",
+        "core.mjs",
+        "client.mjs",
+        "model.mjs",
+        "enhance.mjs",
+        "i18n.mjs",
+        "tags.mjs",
+        "training.mjs",
+        "sessions.mjs",
+        "bridge-popup.mjs",
+        "bridge-protocol.mjs",
+        "companion.mjs"
+      ],
+      "matches": [
+        "https://codeforces.com/*"
+      ]
+    }
+  ]
 }

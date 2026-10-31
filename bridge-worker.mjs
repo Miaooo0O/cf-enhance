@@ -17,7 +17,7 @@ export function createBridgeWorker({chrome,api,fetch:fetcher=fetch,now=Date.now}
   if(busy||!await config())return;busy=true;
   try{
    const stored=await chrome.storage.local.get(['bridgeContext','trainings','training']);const sessions=readSessions(stored).slice(0,20).map(s=>({id:s.id,name:s.name,problems:s.problems.map(({contestId,index,name})=>({contestId,index,name}))}));
-   const data=await post('/poll',{context:{...stored.bridgeContext,sessions}});await state('VS Code 已连接',true);
+   const data=await post('/poll',{context:{...stored.bridgeContext,sessions,autoSubmit:true}});await state('VS Code 已连接',true);
    const all=await tasks();for(const id of data.cancelled||[]){if(all[id]){all[id].state='cancelled';delete all[id].source;}}
    await chrome.storage.local.set({bridgeTasks:all});
    for(const command of data.commands||[])if(command.type==='open'&&validProblem(command.problem))await chrome.tabs.create({url:`https://codeforces.com/problemset/problem/${command.problem.contestId}/${command.problem.index}`});
@@ -29,7 +29,7 @@ export function createBridgeWorker({chrome,api,fetch:fetcher=fetch,now=Date.now}
      const tabs=await chrome.tabs.query({url:'https://codeforces.com/*'});const restored=tabs.find(tab=>{try{return new URL(tab.url).searchParams.get('cfeTask')===remote.id;}catch{return false;}});
      await event(remote,{type:'state',state:'opened',detail:'提交页已打开，等待准备代码'});
      const t={...remote,state:'opened',handle:null,baseline:0,baselineReady:false};
-     if(restored)t.tabId=restored.id;else {const tab=await chrome.tabs.create({url:`https://codeforces.com/contest/${t.problem.contestId}/submit?submittedProblemIndex=${t.problem.index}&cfeTask=${t.id}${t.sessionId?'&cfeSession='+encodeURIComponent(t.sessionId):''}`});t.tabId=tab.id;}
+     if(restored)t.tabId=restored.id;else {const tab=await chrome.tabs.create({active:!t.autoSubmit,url:`https://codeforces.com/contest/${t.problem.contestId}/submit?submittedProblemIndex=${t.problem.index}&cfeTask=${t.id}${t.sessionId?'&cfeSession='+encodeURIComponent(t.sessionId):''}`});t.tabId=tab.id;}
      await writeTask(t);
     }
    }
@@ -63,15 +63,18 @@ export function createBridgeWorker({chrome,api,fetch:fetcher=fetch,now=Date.now}
   if(m.type==='bridgeTick'){await tick();return true;}
   if(m.type==='bridgeContext'){if(sender.tab?.active&&validProblem(m.problem))await chrome.storage.local.set({bridgeContext:{problem:m.problem,handle:String(m.handle||'').slice(0,24),samples:Array.isArray(m.samples)?m.samples.slice(0,20).map(s=>({input:String(s.input).slice(0,65536),output:String(s.output).slice(0,65536)})):[]}});return true;}
   if(m.type==='bridgePageTasks'){return Object.values(await tasks()).filter(t=>!finalStates.has(t.state)).map(({source,...meta})=>meta);}
+  if(m.type==='bridgeResume'){const u=new URL(sender.url||sender.tab?.url);return Object.values(await tasks()).find(t=>t.tabId===sender.tab?.id&&u.hostname==='codeforces.com'&&u.pathname===`/contest/${t.problem.contestId}/submit`)?.id||null;}
   const t=await taskForSender(m,sender);
   if(m.type==='bridgeTask'){if(!new URL(sender.url||sender.tab.url).pathname.match(new RegExp(`^/contest/${t.problem.contestId}/submit/?$`)))throw Error('不在目标题目提交页');return t;}
+  if(m.type==='bridgeFailed'){if(finalStates.has(t.state)||t.state==='judging')return false;t.state='error';await writeTask(t);await event(t,{type:'state',state:'error',detail:String(m.detail||'网页提交受阻').slice(0,300)});return true;}
   if(m.type==='bridgePrepared'){
+   if(t.autoAttempt||!['opened','prepared','error'].includes(t.state))throw Error('本任务已发送或结束，不会重新准备');
    if(!/^[A-Za-z0-9_.-]{3,24}$/.test(m.handle||''))throw Error('请先在 CF 登录后刷新提交页。');
    t.handle=m.handle;t.state='prepared';try{const recent=await api('user.status',{handle:m.handle,from:1,count:100});t.baseline=Math.max(0,...recent.map(s=>s.id));t.baselineReady=true;}catch{t.baselineReady=false;}
-   await event(t,{type:'state',state:'prepared',detail:'代码已填入，请在 CF 检查题号和语言并确认提交'});await writeTask(t);return true;
+   await event(t,{type:'state',state:'prepared',detail:'代码已核对，正在提交'});await writeTask(t);return true;
   }
   if(m.type==='bridgeSubmitted'){
-   if(t.state!=='prepared')throw Error('请先准备代码并确认 CF 账号。');t.submittedAt=now();t.submittedHash=typeof m.source==='string'&&m.source.length<=1024*1024?await hashSource(m.source):t.hash;t.state='submitted';
+   if(t.state!=='prepared')throw Error('请先准备代码并确认 CF 账号。');if(t.autoSubmit)t.autoAttempt=true;t.submittedAt=now();t.submittedHash=typeof m.source==='string'&&m.source.length<=1024*1024?await hashSource(m.source):t.hash;t.state='submitted';
    await writeTask(t);await event(t,{type:'state',state:'submitted',detail:'等待 CF 提交结果；自动核对代码或在结果行点击关联'});return true;
   }
   throw Error('未知联动操作');

@@ -2,7 +2,7 @@
   "name": "cf-enhance-companion",
   "displayName": "CF Enhance Companion",
   "description": "CF Enhance 的可选 VS Code 联动：自由选择代码、目标题目与语言，接收提交反馈。",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "Miaooo0O",
   "engines": {
     "vscode": "^1.85.0"
