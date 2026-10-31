@@ -35,7 +35,7 @@ class Bridge {
  authenticate(req){const c=this.credentials;if(!c)return false;const token=String(req.headers.authorization||'').replace(/^Bearer /,'');const origin=req.headers.origin;
   return req.headers['x-cfe-client']===c.extensionId&&(!origin||origin===`chrome-extension://${c.extensionId}`)&&/^[A-Za-z0-9_-]{43}$/.test(token)&&token.length===c.token.length&&timingSafeEqual(Buffer.from(token),Buffer.from(c.token));
  }
- async start(port=27121){
+ async start(port=0){
   this.server=http.createServer((req,res)=>this.handle(req,res).catch(()=>{if(!res.headersSent)this.reply(res,500,{error:'本机服务处理失败'});else res.end();}));
   await new Promise((resolve,reject)=>{this.server.once('error',reject);this.server.listen(port,'127.0.0.1',resolve);});this.port=this.server.address().port;return this.port;
  }

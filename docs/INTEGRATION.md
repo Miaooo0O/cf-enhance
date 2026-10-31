@@ -5,7 +5,9 @@
 ## 组件
 
 - vscode/bridge.cjs：一次性配对、长随机凭据、来源与 Host 校验、提交任务状态机。
-- vscode/extension.cjs：自由选择编辑器、选区、未保存缓冲区或其他文件；目标题目与语言独立选择；任务树与判题提示。
+- vscode/extension.cjs / controller.cjs：可视面板控制器、实时编辑器与选区、文件选择、提交快照、任务树与判题提示。
+- vscode/panel.cjs / media/：原生主题侧栏 Webview，CSP 限制为本地资源，元数据使用 textContent 渲染；动作白名单、串行处理，代码与认证凭据不传入 Webview。
+- vscode/ports.cjs：系统分配空闲端口，工作区记忆、重启优先复用、EADDRINUSE 自动换端口；旧默认端口迁移。
 - vscode/samples.cjs：经用户确认，在临时目录编译 C++ 快照并运行网页样例。
 - bridge-worker.mjs：本机连接、任务投递、CF 源码摘要核对、编号绑定和结果反馈。
 - companion.mjs：当前题与样例同步、原生提交表单填入、原生结果行读取。
@@ -38,4 +40,4 @@ Chrome 在目标 CF 提交页填入题号、语言和代码，检测到不同草
 
 已实现自由提交与反馈、从场次选题、打开网页题目、C++ 本地样例测试。没有自动 Submit、正式比赛倒计时切题、VS Code 题面翻译或云同步。
 
-47 项自动化测试包含真实 loopback HTTP、VS Code API 模拟命令、身份与源码核对、歧义提交绑定、原生表单适配及实际 C++ 编译运行。没有在用户账号上代提交，也没有通过 Chrome/VS Code 真机安装验收。
+51 项自动化测试包含真实 loopback HTTP、VS Code API 模拟命令与可视提交、面板脚本交互、端口冲突恢复、身份与源码核对、歧义提交绑定、原生表单适配及实际 C++ 编译运行。没有在用户账号上代提交，也没有通过 Chrome/VS Code 真机安装验收。
