@@ -34,7 +34,7 @@ $('sync').onclick=async()=>{
   $('sync').disabled=true;$('accountInfo').textContent='正在分页同步全部提交，请稍候…';
   try{account=await request('sync',{handle:$('handle').value.trim(),force:true});accountInfo();renderHistory();updateCount();}catch(e){$('accountInfo').textContent=e.message;}finally{$('sync').disabled=false;}
 };
-function accountInfo(){$('accountInfo').textContent=account?`${account.handle} · ${Object.values(account.states).filter(s=>s.solved).length} 题 AC · ${new Date(account.time).toLocaleString('zh-CN')} 同步`:'未同步：请填写 handle，或选择不排除提交过的题';}
+function accountInfo(){$('accountInfo').textContent=account?`${account.handle} · ${Object.values(account.states).filter(s=>s.solved).length} 题 AC · ${account.complete?new Date(account.time).toLocaleString('zh-CN')+' 同步':'网页近期记录（请全量同步后再排除已做题）'}`:'未同步：请填写 handle，或选择不排除提交过的题';}
 $('handle').oninput=()=>{accountInfo();if(account&&$('handle').value.trim().toLowerCase()!==account.handle.toLowerCase())$('accountInfo').textContent+=` · 当前仍使用 ${account.handle}，更换后请同步。`;};
 function render(){
   const query=$('search').value.trim().toLowerCase();
@@ -70,7 +70,7 @@ $('filters').onsubmit=async event=>{
     if(settings().exclude!=='none'&&account&&$('handle').value.trim().toLowerCase()!==account.handle.toLowerCase())throw new Error('handle 已更改，请先同步新账号的记录。');
     setBusy(true);await save();const problem=await request('draw',{open:true});
     const stored=await getLocal(['history','drawLog']);history=stored.history||[];drawLog=stored.drawLog||[];renderHistory();
-    $('last').textContent=`${problem.contestId}${problem.index} · ${problem.name} · ${problem.rating}`;$('last').href=problemUrl(problem);$('last').hidden=false;
+    $('last').textContent=`${problem.contestId}${problem.index} · ${problem.name} · ${problem.rating}`;$('last').href=problemUrl(problem)+'?cfeMode=random';$('last').hidden=false;
     $('status').textContent='已在新标签页打开。点击下方题目可前往。';
   }catch(e){showError(e);}finally{setBusy(false);}
 };

@@ -29,7 +29,7 @@ function environment(html,path,state={}){
     requests.push(m);try{let data;
       if(m.type==='database')data={problems:sample,time:Date.now()};
       if(m.type==='save'){await set({[m.field]:m.value});data=true;}
-      if(m.type==='recent')data=[];
+      if(m.type==='draw')data=sample.find(p=>`${p.contestId}/${p.index}`!==m.omitKey);if(m.type==='recent')data=[];if(m.type==='contestProblems')data=sample;
       if(m.type==='sessions')data=readSessions(state);
       if(m.type==='viewed'){const trainings=markViewed(readSessions(state),m.id,m.key);await set({trainings});data=trainings.find(s=>s.id===m.id);}
       if(m.type==='training'){const problems=generateTraining(sample,m.groups,{...state.settings,...m.options},state.history||[],state.account,()=>.99);data={id:'new-session',name:m.name,created:Date.now(),groups:m.groups,problems,viewed:{}};await set({trainings:[data,...readSessions(state)]});}
@@ -71,7 +71,24 @@ test('independent library creates a new mixed session without replacing previous
 });
 test('accepted problem shows an AC card and next action omits the current problem',async()=>{
   const e=environment('<html><body><div id="pageContent"></div></body></html>','/contest/10/problem/A',{account:{handle:'sample',complete:true,states:{'10/A':{solved:true}}}});
-  try{assert.deepEqual(pageProblem(),{contestId:10,index:'A'});await mount();const card=e.document.getElementById('cfe-ac');assert.equal(card.hidden,false);assert(card.textContent.includes('Accepted'));card.querySelector('button').click();await flush();assert.equal(e.requests.find(r=>r.type==='draw').omitKey,'10/A');e.window.dispatchEvent(new e.window.Event('pagehide'));}finally{e.restore();}
+  try{assert.deepEqual(pageProblem(),{contestId:10,index:'A'});await mount();const card=e.document.getElementById('cfe-ac');assert.equal(card.hidden,false);assert(card.textContent.includes('Accepted'));[...card.querySelectorAll('button')].find(b=>b.textContent==='随机跳一题').click();await flush();assert.equal(e.requests.find(r=>r.type==='draw').omitKey,'10/A');e.window.dispatchEvent(new e.window.Event('pagehide'));}finally{e.restore();}
+});
+
+test('ordinary entry offers ordered contest navigation and a separate random action',async()=>{
+ const e=environment('<html><body><div id="pageContent"></div></body></html>','/contest/10/problem/A',{account:{handle:'sample',complete:true,states:{'10/A':{solved:true}}}});
+ try{await mount();const card=e.document.getElementById('cfe-ac');assert.equal(card.querySelectorAll('button').length,2);assert.equal(card.querySelector('button').textContent,'比赛下一题 →');card.querySelector('button').click();await flush();assert(e.requests.some(r=>r.type==='navigate'&&r.url==='https://codeforces.com/contest/10/problem/B'));assert(!e.requests.some(r=>r.type==='draw'));e.window.dispatchEvent(new e.window.Event('pagehide'));}finally{e.restore();}
+});
+
+test('training completion follows its own mixed order, skips AC, and preserves the session URL',async()=>{
+ const session={id:'s',name:'Mixed',problems:[sample[0],{contestId:99,index:'D',name:'Done'},sample[1]],viewed:{}};
+ const e=environment('<html><body><div id="pageContent"></div></body></html>','/problemset/problem/10/A?cfeSession=s',{trainings:[session],account:{handle:'sample',complete:true,states:{'10/A':{solved:true},'99/D':{solved:true}}}});
+ try{await mount();const card=e.document.getElementById('cfe-ac');assert.equal(card.querySelector('button').textContent,'本场下一题 →');card.querySelector('button').click();await flush();assert(e.requests.some(r=>r.type==='navigate'&&r.url==='https://codeforces.com/problemset/problem/10/B?cfeSession=s'));assert(!e.requests.some(r=>r.type==='draw'));e.window.dispatchEvent(new e.window.Event('pagehide'));}finally{e.restore();}
+});
+
+test('random entry prefers random while a native result-page AC restores the ordered context',async()=>{
+ const e=environment('<html><body><div id="pageContent"></div></body></html>','/problemset/problem/10/A?cfeMode=random',{account:{handle:'sample',complete:true,states:{'10/A':{solved:true}}}});
+ try{await mount();const card=e.document.getElementById('cfe-ac');assert.equal(card.querySelector('button').textContent,'随机跳一题');card.querySelector('button').click();await flush();assert(e.requests.some(r=>r.type==='navigate'&&r.url==='https://codeforces.com/problemset/problem/10/B?cfeMode=random'));e.window.dispatchEvent(new e.window.Event('pagehide'));}finally{e.restore();}
+ const r=environment('<html><body><div id="pageContent"></div></body></html>','/problemset/status?my=on');try{await mount();r.window.dispatchEvent(new r.window.CustomEvent('cfe-accepted',{detail:{key:'10/A',mode:'contest'}}));const card=r.document.getElementById('cfe-ac');assert.equal(card.hidden,false);assert.equal(card.querySelector('button').textContent,'比赛下一题 →');assert(card.textContent.includes('10A'));r.window.dispatchEvent(new r.window.Event('pagehide'));}finally{r.restore();}
 });
 test('training entry follows Help; Chinese interface is reversible without translating statements',async()=>{
   const e=environment('<html><body><div class="menu-box"><ul><li><a href="/">Home</a></li><li id="help"><a href="/help">Help</a></li></ul></div><div id="pageContent"><div class="problem-statement"><p>Submit</p><button>Run</button><pre>Input</pre></div><form action="/contest/10/submit"><label>Language:</label><input type="submit" value="Submit"><input name="action" type="submit" value="Submit"></form></div></body></html>','/problemset');
@@ -95,7 +112,7 @@ test('session detail allows choosing any problem, distinguishes viewed from AC, 
 test('opening a session problem marks only that session viewed and offers all original CF problem links',async()=>{
   const sessions=[{id:'one',name:'第一场',created:1,problems:sample,viewed:{}},{id:'two',name:'第二场',created:2,problems:sample,viewed:{}}];
   const e=environment('<html><body><div id="sidebar"></div><div id="pageContent"></div></body></html>','/problemset/problem/10/A?cfeSession=one',{trainings:sessions});
-  try{await mount();const sidebar=e.document.getElementById('cfe-session-sidebar');assert(sidebar);assert.equal(sidebar.querySelectorAll('ol a').length,2);assert(e.state.trainings[0].viewed['10/A']);assert.deepEqual(e.state.trainings[1].viewed,{});assert(sidebar.querySelector('ol a').href.includes('cfeSession=one'));e.window.dispatchEvent(new e.window.Event('pagehide'));}finally{e.restore();}
+  try{await mount();await flush();const sidebar=e.document.getElementById('cfe-session-sidebar');assert(sidebar);assert.equal(sidebar.querySelectorAll('ol a').length,2);assert(e.state.trainings[0].viewed['10/A']);assert.deepEqual(e.state.trainings[1].viewed,{});assert(sidebar.querySelector('ol a').href.includes('cfeSession=one'));e.window.dispatchEvent(new e.window.Event('pagehide'));}finally{e.restore();}
 });
 test('Chinese picker labels keep the stored English tags used for filtering',async()=>{
  const e=environment(popup,'/problemset',{preferences:{chinese:true},settings:{min:800,max:2000,tags:[],exclude:'none',noRepeat:false}});

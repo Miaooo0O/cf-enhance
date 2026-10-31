@@ -1,10 +1,11 @@
 (() => {
-  const problem=location.pathname.match(/^\/problemset\/problem\/(\d+)\/([A-Za-z]\d*)\/?$/);
+  const problem=location.pathname.match(/^\/(?:problemset\/problem|contest)\/(\d+)\/(?:problem\/)?([A-Za-z]\d*)\/?$/);
   if(problem){
     // Carry the exact problem in each link; no shared "last problem" state that
     // could mix up two simultaneously opened problem tabs.
     const session=new URL(location.href).searchParams.get('cfeSession');
-    const destination=`/contest/${problem[1]}/submit?submittedProblemIndex=${encodeURIComponent(problem[2])}&cfePractice=1`+(session?`&cfeSession=${encodeURIComponent(session)}`:'');
+    const mode=new URL(location.href).searchParams.get('cfeMode');
+    const destination=`/contest/${problem[1]}/submit?submittedProblemIndex=${encodeURIComponent(problem[2])}&cfePractice=1`+(session?`&cfeSession=${encodeURIComponent(session)}`:'')+(mode==='random'?'&cfeMode=random':'');
     function updateLinks(){
       for(const link of document.querySelectorAll('a[href]')){
         let url;try{url=new URL(link.getAttribute('href'),location.href);}catch{continue;}

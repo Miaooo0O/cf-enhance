@@ -17,19 +17,19 @@ const validProblem=p=>Number.isSafeInteger(p?.contestId)&&p.contestId>0&&/^[A-Z]
 function publicTask(task){const {source,...metadata}=task;return structuredClone(metadata);}
 class Bridge {
  constructor({tasks=[],credentials=null,onChange=()=>{},saveCredentials=async()=>{},now=Date.now}={}){
-  this.tasks=tasks.map(t=>({...t,state:terminal.has(t.state)?t.state:'interrupted',detail:terminal.has(t.state)?t.detail:'VS Code 已重启，请重新准备代码或在 CF 查看原提交。'}));
+  this.tasks=tasks.map(t=>{const resume=['submitted','judging'].includes(t.state)||t.state==='interrupted'&&t.submissionId;return {...publicTask(t),state:resume?t.submissionId?'judging':'submitted':terminal.has(t.state)?t.state:'interrupted',detail:resume?'VS Code 已恢复，继续接收网页反馈；不会重新提交代码。':terminal.has(t.state)?t.detail:'VS Code 已重启，请重新准备代码或在 CF 查看原提交。'};});
   this.credentials=credentials;this.onChange=onChange;this.saveCredentials=saveCredentials;this.now=now;this.context={};this.lastSeen=0;this.commands=[];
  }
  notify(){this.onChange(this.tasks.map(publicTask));}
  issuePairing(){this.pairCode=randomBytes(24).toString('base64url');this.pairExpires=this.now()+300000;return `cfe-pair:${this.port}:${this.pairCode}`;}
  async revoke(){this.credentials=null;this.pairCode=null;this.lastSeen=0;await this.saveCredentials(null);this.notify();}
- createTask({source,sourceName,problem,language,sessionId=null,autoSubmit=false}){
+ createTask({source,sourceName,problem,language,sessionId=null,autoSubmit=false,mode='contest'}){
   if(typeof source!=='string'||!source.trim()||Buffer.byteLength(source)>MAX_SOURCE)throw Error('代码不能为空，且最多 1 MiB。');
   if(!validProblem(problem))throw Error('目标题目无效。');
   if(!['cpp23','cpp20','cpp17','python3','pypy3','java21','rust','manual'].includes(language))throw Error('语言无效。');
   if(this.tasks.filter(t=>!terminal.has(t.state)).length>=20)throw Error('未完成任务最多 20 个，请先取消或完成旧任务。');
   if(autoSubmit&&this.tasks.some(t=>['queued','opened','prepared','submitted','judging'].includes(t.state)&&t.autoSubmit&&t.problem.contestId===problem.contestId&&t.problem.index===problem.index&&t.language===language&&t.hash===sourceHash(source)))throw Error('相同代码和题目的提交正在处理中，请等待结果。');
-  const task={id:randomUUID(),created:this.now(),source,sourceName:String(sourceName).slice(0,200),problem,language,sessionId,autoSubmit:!!autoSubmit,hash:sourceHash(source),state:'queued',detail:'等待浏览器领取代码快照'};
+  const task={id:randomUUID(),created:this.now(),source,sourceName:String(sourceName).slice(0,200),problem,language,sessionId,mode:mode==='random'?'random':'contest',autoSubmit:!!autoSubmit,hash:sourceHash(source),state:'queued',detail:'等待浏览器领取代码快照'};
   this.tasks.unshift(task);this.notify();return publicTask(task);
  }
  cancel(id){const t=this.tasks.find(t=>t.id===id);if(t&&!terminal.has(t.state)){t.state='cancelled';t.detail='已取消跟踪；已经发送给 CF 的提交不会撤回';delete t.source;this.notify();}}
@@ -57,25 +57,31 @@ class Bridge {
   }
   this.lastSeen=this.now();
   if(req.url==='/poll'){
-   if(body.context)this.context={problem:validProblem(body.context.problem)?body.context.problem:this.context.problem,handle:String(body.context.handle||'').slice(0,24),sessions:Array.isArray(body.context.sessions)?body.context.sessions.slice(0,20):[],samples:Array.isArray(body.context.samples)?body.context.samples.slice(0,20):[],autoSubmit:body.context.autoSubmit===true,updated:this.now()};
+   if(body.context)this.context={problem:validProblem(body.context.problem)?body.context.problem:this.context.problem,handle:String(body.context.handle||'').slice(0,24),sessions:Array.isArray(body.context.sessions)?body.context.sessions.slice(0,20):[],samples:Array.isArray(body.context.samples)?body.context.samples.slice(0,20):[],autoSubmit:body.context.autoSubmit===true,protocolVersion:Number(body.context.protocolVersion)||1,sessionId:body.context.sessionId||null,mode:body.context.mode==='random'?'random':'contest',updated:this.now()};
    for(const t of this.tasks)if(!terminal.has(t.state)&&this.now()-t.created>86400000){t.state='expired';delete t.source;}
-   const task=this.tasks.find(t=>['queued','opened'].includes(t.state)&&t.source);return this.reply(res,200,{task:task?structuredClone(task):null,commands:this.commands.splice(0),cancelled:this.tasks.filter(t=>terminal.has(t.state)).map(t=>t.id)});
+   const task=this.tasks.find(t=>['queued','opened'].includes(t.state)&&t.source);return this.reply(res,200,{capabilities:{webFeedback:true},task:task?structuredClone(task):null,commands:this.commands.splice(0),cancelled:this.tasks.filter(t=>terminal.has(t.state)).map(t=>t.id)});
   }
   if(req.url==='/event'){
+   if(body.type==='observed'){
+    if(!validProblem(body.problem)||!Number.isSafeInteger(body.submissionId)||body.submissionId<=0||!/^[A-Za-z0-9_.-]{3,24}$/.test(body.handle||'')||!/^[A-Z_]{2,50}$/.test(body.verdict||''))return this.reply(res,400,{error:'Invalid web submission'});
+    let found=this.tasks.find(t=>t.submissionId===body.submissionId);if(!found){found={id:'web:'+body.submissionId,origin:'browser',created:this.now(),problem:body.problem,sourceName:'网页提交',language:'网页选择',submissionId:body.submissionId,handle:body.handle};this.tasks.push(found);}
+    if(found.state==='finished'&&body.verdict==='TESTING')return this.reply(res,200,{ignored:true});
+    Object.assign(found,{verdict:body.verdict,state:body.verdict==='TESTING'?'judging':'finished',timeMs:Number(body.timeMs)||0,memoryBytes:Number(body.memoryBytes)||0,passedTests:Number(body.passedTests)||0,detail:'网页提交 · '+body.verdict,updated:this.now()});this.tasks.sort((a,b)=>{const ap=!a.submissionId&&!terminal.has(a.state),bp=!b.submissionId&&!terminal.has(b.state);return ap!==bp?ap?-1:1:a.submissionId&&b.submissionId?b.submissionId-a.submissionId:(b.created||0)-(a.created||0);});this.tasks=this.tasks.slice(0,200);this.notify();return this.reply(res,200,{ok:true});
+   }
    const task=this.tasks.find(t=>t.id===body.id);if(!task)return this.reply(res,404,{error:'Task not found'});
-   if(terminal.has(task.state))return this.reply(res,200,{ignored:true});
+   if(terminal.has(task.state)&&!(task.state==='interrupted'&&body.type==='bound'))return this.reply(res,200,{ignored:true});
    if(body.type==='bound'){
-    if(!['submitted','judging'].includes(task.state))return this.reply(res,409,{error:'Task has not been submitted'});
+    if(!['submitted','judging','interrupted'].includes(task.state))return this.reply(res,409,{error:'Task has not been submitted'});
     if(!Number.isSafeInteger(body.submissionId)||body.submissionId<=0||! /^[A-Za-z0-9_.-]{3,24}$/.test(body.handle||''))return this.reply(res,400,{error:'Invalid submission'});
     if(task.submissionId&&task.submissionId!==body.submissionId)return this.reply(res,409,{error:'任务已经关联其他提交'});
-    task.submissionId=body.submissionId;task.handle=body.handle;task.state='judging';delete task.source;
+    this.tasks=this.tasks.filter(other=>other===task||other.origin!=='browser'||other.submissionId!==body.submissionId);task.submissionId=body.submissionId;task.handle=body.handle;task.state='judging';task.attention=false;delete task.source;
    }else if(body.type==='verdict'){
     if(!task.submissionId||task.submissionId!==body.submissionId)return this.reply(res,409,{error:'Submission mismatch'});
     if(!/^[A-Z_]{2,50}$/.test(body.verdict||''))return this.reply(res,400,{error:'Invalid verdict'});
     Object.assign(task,{verdict:body.verdict,passedTests:Number(body.passedTests)||0,timeMs:Number(body.timeMs)||0,memoryBytes:Number(body.memoryBytes)||0,state:body.verdict==='TESTING'?'judging':'finished'});delete task.source;
    }else if(body.type==='state'){
     const transitions={queued:['opened','error'],opened:['prepared','error'],prepared:['submitted','error'],submitted:['error'],error:['opened','prepared']};
-    if(!transitions[task.state]?.includes(body.state)&&task.state!==body.state)return this.reply(res,409,{error:'Invalid state transition'});task.state=body.state;
+    if(!transitions[task.state]?.includes(body.state)&&task.state!==body.state)return this.reply(res,409,{error:'Invalid state transition'});task.state=body.state;task.attention=body.attention===true;
    }else return this.reply(res,400,{error:'Unknown event'});
    task.detail=String(body.detail||task.state).slice(0,300);task.updated=this.now();this.notify();return this.reply(res,200,{ok:true});
   }

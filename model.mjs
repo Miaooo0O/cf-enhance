@@ -53,3 +53,5 @@ export function acceptedPracticeSubmission(pending,handle,path,submissions,now=D
   if(!contest||!new RegExp(`^/contest/${contest}/(?:my|status)/?$`).test(path))return null;
   return submissions.find(s=>s.verdict==='OK'&&s.problem&&key(s.problem)===pending.key&&s.id>pending.baseline&&s.creationTimeSeconds>=Math.floor(pending.started/1000)-2) || null;
 }
+
+export function nextSessionProblem(session,currentKey,states={}) {const items=session?.problems||[],pos=items.findIndex(p=>key(p)===currentKey);if(pos<0)return null;return [...items.slice(pos+1),...items.slice(0,pos)].find(p=>!states[key(p)]?.solved)||null;}

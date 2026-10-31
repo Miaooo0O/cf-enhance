@@ -9,7 +9,7 @@ const recentCache=new Map();
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const bridge=createBridgeWorker({chrome,api:(method,params)=>{const job=queue.then(()=>api(method,params));queue=job.catch(()=>{});return job;}});
 let bridgeQueue=Promise.resolve();
-chrome.alarms?.onAlarm.addListener(alarm=>{if(alarm.name==='cfe-bridge'){const job=bridgeQueue.then(()=>bridge.tick());bridgeQueue=job.catch(()=>{});}});
+chrome.alarms?.onAlarm.addListener(alarm=>{if(alarm.name==='cfe-bridge'){void bridge.tick();}});
 chrome.runtime.onStartup?.addListener(()=>{void chrome.storage.local.get('bridgeConnection').then(s=>{if(s.bridgeConnection)chrome.alarms?.create('cfe-bridge',{periodInMinutes:.5});});});
 async function api(method,params={}){
   const {apiLast=0}=await chrome.storage.local.get('apiLast');
@@ -54,12 +54,13 @@ async function record(problems,extra={}){
 async function handleMessage(m){
   if(m.type==='sessions'){
     const stored=await chrome.storage.local.get(['trainings','training']);const trainings=readSessions(stored);
-    if(!stored.trainings)await chrome.storage.local.set({trainings});return trainings;
+    return trainings;
   }
   if(m.type==='viewed'){
     const stored=await chrome.storage.local.get(['trainings','training']);
     const trainings=markViewed(readSessions(stored),m.id,m.key);await chrome.storage.local.set({trainings});return trainings.find(s=>String(s.id)===String(m.id));
   }
+  if(m.type==='contestProblems'){if(!Number.isSafeInteger(m.contestId)||m.contestId<=0)throw Error('比赛编号无效');const result=await api('contest.standings',{contestId:m.contestId,from:1,count:1});return result.problems.map(({contestId,index,name})=>({contestId,index,name}));}
   if(m.type==='database')return database(m.force);
   if(m.type==='sync')return sync(m.handle,m.force);
   if(m.type==='recent'){
@@ -98,13 +99,15 @@ async function handleMessage(m){
     }
     const p=choose(candidates(problems,settings,s.history||[],s.account).filter(p=>key(p)!==m.omitKey));if(!p)throw new Error('没有符合条件的题目，请调整筛选条件或去重设置。');
     await record([p]);
-    if(m.open)await chrome.tabs.create({url:problemUrl(p),active:false});return p;
+    if(m.open)await chrome.tabs.create({url:problemUrl(p)+'?cfeMode=random',active:false});return p;
   }
   throw new Error('未知操作');
 }
 chrome.runtime.onMessage.addListener((m,sender,reply)=>{
   if(sender.id!==chrome.runtime.id)return;
+  if(m?.type==='bridgeTick'){void bridge.tick();reply({ok:true,data:true});return false;}
   if(typeof m?.type==='string'&&m.type.startsWith('bridge')){const job=bridgeQueue.then(()=>bridge.handle(m,sender));bridgeQueue=job.catch(()=>{});job.then(data=>reply({ok:true,data}),e=>reply({ok:false,error:e.message}));return true;}
+  if(m?.type==='sessions'){handleMessage(m).then(data=>reply({ok:true,data}),e=>reply({ok:false,error:e.message}));return true;}
   const job=queue.then(()=>handleMessage(m));queue=job.catch(()=>{});
   job.then(data=>reply({ok:true,data}),e=>reply({ok:false,error:e.message}));return true;
 });

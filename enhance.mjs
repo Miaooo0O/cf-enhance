@@ -1,9 +1,9 @@
 import {request,getLocal,setLocal,listenStorage,contextActive,isContextError,refreshMessage} from './client.mjs';
 import {key,problemUrl} from './core.mjs';
-import {statusOf,acceptedPracticeSubmission} from './model.mjs';
+import {statusOf,acceptedPracticeSubmission,nextContestProblem,nextSessionProblem} from './model.mjs';
 import {mountPicker} from './popup.mjs';
 import {createTranslator} from './i18n.mjs';
-import {libraryUrl,sessionUrl} from './sessions.mjs';
+import {libraryUrl,sessionUrl,sessionProblemUrl} from './sessions.mjs';
 import {mountTrainingPage,mountSessionContext} from './training.mjs';
 const defaults={hideTags:false,hideRating:false,focus:false,readable:false,chinese:false};
 function el(tag,attrs={},text){const n=document.createElement(tag);for(const [k,v] of Object.entries(attrs)){if(k==='class')n.className=v;else n.setAttribute(k,v);}if(text!==undefined)n.textContent=text;return n;}
@@ -67,11 +67,24 @@ export async function mount(){
     title.append(button('复制',async event=>{const b=event.currentTarget;try{await navigator.clipboard.writeText(pre.innerText);b.textContent='已复制';}catch{b.textContent='复制失败';}setTimeout(()=>b.textContent='复制',1500);}));title.lastChild.classList.add('cfe-copy');
   }
   const current=pageProblem();let completedKey=current?key(current):null;
-  let completedSession=new URL(location.href).searchParams.get('cfeSession');
+  let completedSession=new URL(location.href).searchParams.get('cfeSession'),completedMode=new URL(location.href).searchParams.get('cfeMode')||'contest';
   await mountTrainingPage({content,root});
-  if(current&&completedSession)await mountSessionContext(current,completedSession);
+  if(current&&completedSession)void mountSessionContext(current,completedSession).catch(e=>notice.textContent=e.message);
   const ac=el('div',{id:'cfe-ac',hidden:'','role':'status','aria-live':'polite'}),acLabel=el('strong',{},'AC'),acText=el('p');
-  const next=button('再跳一题 →',async()=>{next.disabled=true;try{if(completedSession){location.assign(sessionUrl(completedSession));return;}const p=await request('draw',{omitKey:completedKey});location.assign(problemUrl(p));}catch(e){acText.textContent=e.message;next.disabled=false;}});ac.append(acLabel,acText,next);if(completedSession)next.textContent='返回本场选题 →';if(current)root.after(ac);
+  const random=button('随机跳一题',async()=>{random.disabled=true;try{const p=await request('draw',{omitKey:completedKey});location.assign(problemUrl(p)+'?cfeMode=random');}catch(e){acText.textContent=e.message;random.disabled=false;}});
+  const next=button('比赛下一题 →',async()=>{next.disabled=true;try{
+    const [contest,index]=completedKey.split('/'),problem={contestId:Number(contest),index};
+    const latest=(await getLocal('account')).account||account,states={...latest?.states,[completedKey]:{solved:true}};
+    if(completedSession){const sessions=await request('sessions'),session=sessions.find(s=>String(s.id)===String(completedSession));if(!session)throw Error('题单场次不存在，请返回题单查看。');const p=nextSessionProblem(session,completedKey,states);if(!p){next.textContent='本场已全部完成';return;}location.assign(sessionProblemUrl(completedSession,p));return;}
+    let indices=[];try{const response=await fetch('https://codeforces.com/contest/'+contest,{credentials:'include',signal:AbortSignal.timeout(5000)});if(response.ok){const page=new DOMParser().parseFromString(await response.text(),'text/html');indices=[...page.querySelectorAll('a[href]')].map(a=>a.getAttribute('href').match(new RegExp('^/contest/'+contest+'/problem/([A-Za-z]\\d*)/?$'))?.[1]).filter(Boolean);}}catch{}
+    if(!indices.length)indices=(await request('contestProblems',{contestId:problem.contestId})).map(p=>p.index);
+    const destination=nextContestProblem(indices,problem.contestId,problem.index,states);if(!destination){next.textContent='本场已全部完成';return;}location.assign('https://codeforces.com/contest/'+contest+'/problem/'+destination);
+   }catch(e){acText.textContent=e.message;next.disabled=false;}});
+  function orderActions(){next.textContent=completedSession?'本场下一题 →':'比赛下一题 →';ac.append(...(completedMode==='random'&&!completedSession?[random,next]:[next,random]));}
+  ac.append(acLabel,acText);orderActions();if(current)root.after(ac);
+  function completed(info){if(!/^\d+\/[A-Za-z]\d*$/.test(info?.key||''))return;completedKey=info.key;completedSession=info.sessionId||null;completedMode=info.mode||'contest';if(!ac.isConnected)root.after(ac);ac.hidden=false;orderActions();acText.replaceChildren(document.createTextNode(info.key.replace('/','')+' · Accepted'));}
+  const onAccepted=event=>completed(event.detail);window.addEventListener('cfe-accepted',onAccepted);cleanups.push(()=>window.removeEventListener('cfe-accepted',onAccepted));
+  if(!current)void request('bridgePageContext').then(info=>{if(!stopped&&info?.accepted)completed({...info,key:info.problem.contestId+'/'+info.problem.index});}).catch(()=>{});
   let celebrated=false;
   function renderAC(){if(!current)return;const solved=account?.states?.[key(current)]?.solved;ac.hidden=!solved;
     if(solved){acText.replaceChildren(document.createTextNode(`${current.contestId}${current.index} · Accepted`),el('span',{class:'cfe-sub'},`${account.handle} 已通过这道题`));if(!celebrated){celebrated=true;if(!matchMedia('(prefers-reduced-motion: reduce)').matches)ac.animate?.([{opacity:0,transform:'translateY(-6px)'},{opacity:1,transform:'translateY(0)'}],{duration:320});}}
@@ -93,7 +106,7 @@ export async function mount(){
     if(!practice&&!pendingPractice&&!force)return;
     const recent=await request('recent',{handle:account.handle,force});latestSubmissionId=Math.max(0,...recent.map(s=>s.id));if(force)notice.textContent='提交状态已检查。';
       if(pendingPractice){const accepted=acceptedPracticeSubmission(pending,account.handle,location.pathname,recent);
-        if(accepted){completedKey=pending.key;if(pending.sessionId){completedSession=pending.sessionId;next.textContent='返回本场选题 →';}if(!ac.isConnected)root.after(ac);ac.hidden=false;acText.replaceChildren(document.createTextNode(`${pending.key.replace('/','')} · Accepted`),el('span',{class:'cfe-sub'},'本次提交已通过，继续下一道练习吧。'));await request('save',{field:'pendingSubmit',value:null});}
+        if(accepted){completedKey=pending.key;if(pending.sessionId){completedSession=pending.sessionId;orderActions();}if(!ac.isConnected)root.after(ac);ac.hidden=false;acText.replaceChildren(document.createTextNode(`${pending.key.replace('/','')} · Accepted`),el('span',{class:'cfe-sub'},'本次提交已通过，继续下一道练习吧。'));await request('save',{field:'pendingSubmit',value:null});}
       }
     }catch(e){if(isContextError(e))invalidated();else notice.textContent='状态同步失败：'+e.message;}finally{polling=false;}
   }
