@@ -19,7 +19,7 @@ export async function mountTrainingPage({content,root}){
   const view=el('section',{id:'cfe-training-page'});content.replaceChildren(root,view);
   const sidebar=document.querySelector('#sidebar');if(sidebar)sidebar.hidden=true;
   const params=new URL(location.href).searchParams,selectedId=params.get('session');
-  let sessions=await request('sessions');const stored=await getLocal(['account','preferences','settings','trainingTrash']);let deleted=stored.trainingTrash||[],account=stored.account,chinese=!!stored.preferences?.chinese;
+  const [initialSessions,stored]=await Promise.all([request('sessions'),getLocal(['account','preferences','settings','trainingTrash'])]);let sessions=initialSessions;let deleted=stored.trainingTrash||[],account=stored.account,chinese=!!stored.preferences?.chinese;
   let selected=sessions.find(s=>String(s.id)===selectedId);
   const nav=el('div',{class:'cfe-session-nav'});nav.append(link('题单 / 全部场次',libraryUrl()));if(selected)nav.append(el('span',{},' » '+selected.name));view.append(nav);
   const heading=el('h1',{},selected?.name||'我的训练场次');view.append(heading);
@@ -44,7 +44,7 @@ export async function mountTrainingPage({content,root}){
     let validTags=new Set(Object.keys(tagNames));
     function renderSuggestions(){suggestions.replaceChildren();for(const t of [...validTags].sort())suggestions.append(el('option',{value:displayTag(t,chinese)},chinese?(tagNames[t]||t):t));}
     renderSuggestions();
-    request('database').then(db=>{validTags=new Set(db.problems.flatMap(p=>p.tags));renderSuggestions();}).catch(e=>info.textContent=e.message);
+    // Known CF tags are local; fetch the large problem database only on generation.
     function group(g={min:1400,max:1600,count:2,tags:[]}){
       const row=el('div',{class:'cfe-group'}),fields={};
       for(const [id,label,value]of [['min','最低分',g.min],['max','最高分',g.max],['count','题数',g.count]]){const l=el('label',{},label),input=el('input',{type:'number',value:String(value),min:id==='count'?'1':'0',step:id==='count'?'1':'100','aria-label':label});l.append(input);fields[id]=input;row.append(l);}

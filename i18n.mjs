@@ -65,17 +65,19 @@ export function createTranslator(doc){
   function scan(root=doc){
     if(!enabled)return;
     if(root.nodeType===3){const parent=root.parentElement;if(parent?.closest(uiSelector)&&!parent.closest(protectedSelector))update(root);return;}
-    if(root.matches?.(uiSelector))process(root);
-    for(const n of root.querySelectorAll(uiSelector))process(n);
+    // Walk only outer UI regions; nested matches were previously walked repeatedly.
+    if(root.nodeType===1&&root.closest?.(protectedSelector))return;
+    if(root.matches?.(uiSelector)||root.nodeType===1&&root.parentElement?.closest(uiSelector))process(root);
+    else for(const n of root.querySelectorAll(uiSelector))if(!n.parentElement?.closest(uiSelector))process(n);
     for(const a of root.querySelectorAll('a[href]')){
       if(a.closest(protectedSelector))continue;
       let path;try{path=new URL(a.getAttribute('href'),'https://codeforces.com').pathname;}catch{continue;}
       if(routes.test(path))process(a);
     }
-    for(const n of records.keys())if(!n.isConnected)records.delete(n);
+    if(root===doc||records.size>2048)for(const n of records.keys())if(!n.isConnected)records.delete(n);
   }
   return {scan,setEnabled(value){
-    enabled=!!value;if(enabled){scan();return;}
+    if(enabled===!!value)return;enabled=!!value;if(enabled){scan();return;}
     for(const [node,fields]of records){for(const [field,entry]of Object.entries(fields)){
       if(field==='text'){if(node.nodeValue===entry.translated)node.nodeValue=entry.original;}
       else if(node.getAttribute(field)===entry.translated)node.setAttribute(field,entry.original);

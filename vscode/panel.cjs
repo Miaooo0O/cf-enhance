@@ -22,6 +22,11 @@ class PanelProvider{
   const allowed=new Set(['ready','refresh','pair','disconnect','browse','submit','samples','openProblem','addCase','editCase','deleteCase','syncSamples','runTests','stopTests','openSettings','viewTask','cancelTask','showOutput']);
   if(!message||typeof message!=='object'||!allowed.has(message.action))return;
   if(message.action==='ready'||message.action==='refresh'){this.publish(true);return;}
+  if(message.action==='runTests'){
+   if(this.testStarting||this.getState().judge?.running)return;
+   this.testStarting=true;this.notice='';
+   try{this.notice=await this.act(message)||'';}catch(e){this.notice=e.message||String(e);}finally{this.testStarting=false;this.publish();}return;
+  }
   if(message.action==='editCase'||message.action==='stopTests'){try{const notice=await this.act(message);if(notice)this.notice=notice;}catch(e){this.notice=e.message;}this.publish();return;}
   if(this.busy)return;this.busy=true;this.notice='';this.publish(true);
   try{this.notice=await this.act(message)||'';}catch(e){this.notice=e.message||String(e);}finally{this.busy=false;this.publish(true);}

@@ -10,8 +10,10 @@ import {readSessions,markViewed} from './sessions.mjs';
 import {mountTrainingPage,mountSessionContext} from './training.mjs';
 import {normalizeTag} from './tags.mjs';
 import {request,getLocal,setLocal} from './client.mjs';
+import vm from 'node:vm';
 const popup=await fs.readFile(new URL('./popup.html',import.meta.url),'utf8');
 const css=await fs.readFile(new URL('./popup.css',import.meta.url),'utf8');
+const pageStart=await fs.readFile(new URL('./page-start.js',import.meta.url),'utf8');
 const sample=[{contestId:10,index:'A',name:'Alpha',rating:1400,tags:['dp']},{contestId:10,index:'B',name:'Beta',rating:1600,tags:['math']}];
 const flush=async()=>{for(let i=0;i<6;i++)await new Promise(setImmediate);};
 function environment(html,path,state={}){
@@ -38,6 +40,21 @@ function environment(html,path,state={}){
   }}});
   return {document,window,state,requests,set,timers,cleared,listeners,restore(){for(const [k,d]of originals){if(d)Object.defineProperty(globalThis,k,d);else delete globalThis[k];}}};
 }
+
+test('document-start bootstrap marks training before mount and translates parsed UI without touching statements',async()=>{
+ const e=environment('<html><body><nav class="menu-box"><a href="/help">Help</a></nav><div class="problem-statement">Help</div></body></html>','/problemset?cfe=training',{preferences:{chinese:true,hideTags:true}});
+ const mirror=new Map([['cfe.display.v1',JSON.stringify({chinese:true,hideTags:true})]]);
+ try{
+  const manifest=JSON.parse(await fs.readFile(new URL('./manifest.json',import.meta.url),'utf8'));const start=manifest.content_scripts.find(s=>s.js.includes('page-start.js'));assert.equal(start.run_at,'document_start');assert(start.css.includes('enhance.css'));
+  const context=vm.createContext({document:e.document,window:e.window,chrome:globalThis.chrome,location:globalThis.location,URL,MutationObserver:globalThis.MutationObserver,localStorage:{getItem:k=>mirror.get(k),setItem:(k,v)=>mirror.set(k,v)}});
+  vm.runInContext(await fs.readFile(new URL('./i18n-start.js',import.meta.url),'utf8'),context);vm.runInContext(pageStart,context);
+  assert(e.document.documentElement.classList.contains('cfe-training-page'));assert(e.document.documentElement.classList.contains('cfe-hide-tags'));assert.equal(e.document.querySelector('.menu-box a').textContent,'帮助');await flush();
+  assert.equal(e.document.querySelector('.menu-box a').textContent,'帮助');assert.equal(e.document.querySelector('.problem-statement').textContent,'Help');
+  const b=e.document.createElement('button');b.textContent='Submit';e.document.querySelector('nav').append(b);await flush();assert.equal(b.textContent,'提交');
+  await e.set({preferences:{chinese:false}});await flush();assert.equal(b.textContent,'Submit');assert.equal(e.document.querySelector('nav a').textContent,'Help');assert(!e.document.documentElement.classList.contains('cfe-hide-tags'));
+  e.window.dispatchEvent(new e.window.Event('pagehide'));assert.equal(e.listeners.size,0);
+ }finally{e.restore();}
+});
 test('history upgrades old key-only records, filters statuses/tags/rating, and reset keeps the log',async()=>{
   const e=environment(popup,'/problemset',{history:['10/A','10/B'],account:{handle:'sample',time:Date.now(),complete:true,states:{'10/A':{solved:true}}}});
   try{const dispose=await mountPicker(e.document);const $=id=>e.document.getElementById(id);

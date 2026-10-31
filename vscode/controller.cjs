@@ -1,4 +1,5 @@
 const vscode=require('vscode');const path=require('node:path');const {randomUUID}=require('node:crypto');
+const {CompileCache}=require('./compile-cache.cjs');
 const {JudgeStore}=require('./judge-store.cjs');const {runCases}=require('./judge-runner.cjs');
 const {Bridge,parseProblem,terminal}=require('./bridge.cjs');const {startAvailable}=require('./ports.cjs');const {PanelProvider}=require('./panel.cjs');
 const labels={queued:'等待浏览器',opened:'网页已打开',prepared:'正在提交',submitted:'等待 CF 返回编号',judging:'评测中',finished:'已完成',cancelled:'已取消',expired:'已过期',interrupted:'需要重新准备',error:'需要处理'};
@@ -8,12 +9,13 @@ let deactivateCurrent=async()=>{};
 async function activate(context){
  const output=vscode.window.createOutputChannel('CF Enhance'),changed=new vscode.EventEmitter();
  let bridge=null,starting=null,lastEditor=vscode.window.activeTextEditor,fileDocument=null,sampleResults=null,sampleProblem='',persisted=Promise.resolve(),closed=false,closing;
+ const compileCache=new CompileCache(),descriptions=new WeakMap();let publishTimer;
  const seen=new Map(),judgeStore=new JudgeStore(context.workspaceState||context.globalState),judgeResults=new Map();let judgeJob=null;
  function judgeSuite(document){if(!document||document.isClosed)return null;const key=document.uri?.toString()||document.fileName,suite=judgeStore.suite(key,path.basename(document.fileName)),run=judgeResults.get(key);return {...suite,results:(run?.results||[]).filter(r=>suite.cases.some(c=>c.id===r.id&&c.revision===r.revision)),compileError:run?.compileError,stale:run&&run.version!==(document.version||0),running:judgeJob?.key===key};}
 
  const status=vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right,30);status.command='cfEnhance.show';status.text='$(beaker) CF Enhance';status.tooltip='离线本地测试与网页提交；点击打开面板';status.show();
  function editor(){return lastEditor&&!lastEditor.document.isClosed?lastEditor:vscode.window.activeTextEditor;}
- function description(document,selection){if(!document||document.isClosed)return null;return {name:document.isUntitled?'未保存的编辑器':path.basename(document.fileName),description:document.isUntitled?'未保存缓冲区':document.fileName,uri:document.uri?.toString()||document.fileName,languageId:document.languageId||'',characters:document.getText().length,selectionCharacters:selection&&!selection.isEmpty?document.getText(selection).length:0,dirty:!!document.isDirty};}
+ function description(document,selection){if(!document||document.isClosed)return null;let cached=descriptions.get(document);if(!cached||cached.version!==(document.version||0)){cached={version:document.version||0,characters:document.getText().length};descriptions.set(document,cached);}return {name:document.isUntitled?'未保存的编辑器':path.basename(document.fileName),description:document.isUntitled?'未保存缓冲区':document.fileName,uri:document.uri?.toString()||document.fileName,languageId:document.languageId||'',characters:cached.characters,selectionCharacters:selection&&!selection.isEmpty?document.getText(selection).length:0,dirty:!!document.isDirty};}
  function targets(){return [{key:'manual',label:'输入题号或链接'},...(bridge?.context.problem?[{key:`current:${bridge.context.problem.contestId}/${bridge.context.problem.index}`,label:`网页当前题 · ${bridge.context.problem.contestId}${bridge.context.problem.index}`,problem:bridge.context.problem,sessionId:bridge.context.sessionId,mode:bridge.context.mode}]:[]),...(bridge?.context.sessions||[]).flatMap(s=>(s.problems||[]).map(p=>({key:`session:${s.id}:${p.contestId}/${p.index}`,label:`${s.name} · ${p.contestId}${p.index} ${p.name||''}`,problem:{contestId:p.contestId,index:p.index},sessionId:s.id})))];}
  function getState(){const e=editor();return {judge:{editor:judgeSuite(e?.document),file:judgeSuite(fileDocument),running:!!judgeJob},trusted:!!vscode.workspace.isTrusted,paired:!!bridge?.credentials,connected:!!bridge?.credentials&&Date.now()-bridge.lastSeen<90000,port:bridge?.port||null,editor:description(e?.document,e?.selection),file:description(fileDocument),currentProblem:bridge?.context.problem||null,targets:targets().map(({key,label})=>({key,label})),autoSubmit:bridge?.context.autoSubmit===true,sampleCount:bridge?.context.samples?.length||0,sampleResults,sampleProblem,tasks:(bridge?.tasks||context.globalState.get('cfEnhance.tasks',[])).map(t=>({id:t.id,problem:t.problem,sourceName:t.sourceName,language:t.language,state:t.state,result:verdicts[t.verdict]||labels[t.state]||t.state,detail:t.detail,attention:t.attention,verdict:t.verdict,submissionId:t.submissionId,timeMs:t.timeMs,memoryBytes:t.memoryBytes,terminal:terminal.has(t.state)}))};}
  const panel=new PanelProvider(context.extensionUri,getState,act);
@@ -66,8 +68,8 @@ async function activate(context){
   const old=judgeResults.get(m.suiteKey),record={version:snapshot.version,results:m.id&&old?.version===snapshot.version?(old.results||[]).filter(r=>r.id!==m.id):[],compileError:null};judgeResults.set(m.suiteKey,record);publish();
   ticket.promise=(async()=>{
    const config=vscode.workspace.getConfiguration('cfEnhance');
-   const result=await runCases(snapshot,cases,{compiler:config.get('compiler','g++'),cCompiler:config.get('cCompiler','gcc'),python:config.get('python','python'),timeout:config.get('testTimeout',3000),comparison:config.get('outputComparison','tokens'),signal:controller.signal,onResult:r=>{output.appendLine('本地用例 '+r.id+'：'+r.status+' · '+r.timeMs+' ms\n'+r.stdout+'\n'+r.stderr);record.results.push({...r,stdout:r.stdout.slice(0,16000),stderr:r.stderr.slice(0,16000)});publish();}});
-   record.compileError=result.compileError?.slice(0,16000);if(result.compileError)output.appendLine(result.compileError);return result.cancelled?'测试已停止。':result.compileError?'编译失败，请查看诊断。':'本地测试完成。';
+   const result=await runCases(snapshot,cases,{compiler:config.get('compiler','g++'),cCompiler:config.get('cCompiler','gcc'),python:config.get('python','python'),timeout:config.get('testTimeout',3000),comparison:config.get('outputComparison','tokens'),cache:compileCache,signal:controller.signal,onResult:r=>{output.appendLine('本地用例 '+r.id+'：'+r.status+' · '+r.timeMs+' ms\n'+r.stdout+'\n'+r.stderr);record.results.push({...r,stdout:r.stdout.slice(0,16000),stderr:r.stderr.slice(0,16000)});publish();}});
+   record.compileError=result.compileError?.slice(0,16000);if(result.compileError)output.appendLine(result.compileError);return result.cancelled?'测试已停止。':result.compileError?'编译失败，请查看诊断。':'';
   })();try{return await ticket.promise;}finally{if(judgeJob===ticket)judgeJob=null;publish();}
  }
  async function act(m){
@@ -106,10 +108,11 @@ async function activate(context){
  command('cfEnhance.openProblem',async()=>{const input=await vscode.window.showInputBox({prompt:'输入 CF 题号或链接'});if(input)await act({action:'openProblem',targetKey:'manual',problem:input});});
  command('cfEnhance.copyCode',async()=>vscode.commands.executeCommand('cfEnhance.tasks'));
  command('cfEnhance.runSamples',async()=>{const snapshot=await code('editor');const ok=await vscode.window.showInformationMessage('使用当前代码运行网页当前题的 C++ 样例？',{modal:true},'运行样例');if(ok==='运行样例'){panel.notice=await samples(snapshot);publish();}});
- for(const [event,fn]of [[vscode.window.onDidChangeActiveTextEditor,e=>{if(e?.document){lastEditor=e;}publish();}],[vscode.window.onDidChangeTextEditorSelection,()=>publish()],[vscode.workspace.onDidChangeTextDocument,()=>publish()],[vscode.workspace.onDidCloseTextDocument,()=>publish()]])if(event)context.subscriptions.push(event(fn));
+ const schedulePublish=()=>{clearTimeout(publishTimer);publishTimer=setTimeout(()=>{if(!closed)publish();},75);};
+ for(const [event,fn]of [[vscode.window.onDidChangeActiveTextEditor,e=>{if(e?.document){lastEditor=e;}publish();}],[vscode.window.onDidChangeTextEditorSelection,schedulePublish],[vscode.workspace.onDidChangeTextDocument,schedulePublish],[vscode.workspace.onDidCloseTextDocument,()=>publish()]])if(event)context.subscriptions.push(event(fn));
  if(vscode.workspace.isTrusted){try{await ensure();}catch(e){panel.notice=e.message;output.appendLine(e.message);}}
  const ticker=setInterval(()=>{const s=getState();status.text=s.connected?'$(link) CF 已连接':'$(beaker) 本地测试';publish();},2000);
- async function dispose(){if(closing)return closing;closed=true;clearInterval(ticker);closing=(async()=>{if(starting)await starting.catch(()=>{});if(judgeJob){judgeJob.controller.abort();await judgeJob.promise?.catch(()=>{});}await judgeStore.flush();if(bridge)await bridge.close();bridge=null;await persisted;})();return closing;}
+ async function dispose(){if(closing)return closing;closed=true;clearInterval(ticker);clearTimeout(publishTimer);closing=(async()=>{if(starting)await starting.catch(()=>{});if(judgeJob){judgeJob.controller.abort();await judgeJob.promise?.catch(()=>{});}await compileCache.dispose();await judgeStore.flush();if(bridge)await bridge.close();bridge=null;await persisted;})();return closing;}
  deactivateCurrent=dispose;context.subscriptions.push({dispose:()=>{void dispose();}});
 }
 async function deactivate(){await deactivateCurrent();}

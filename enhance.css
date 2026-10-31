@@ -22,6 +22,8 @@ html.cfe-readable .problem-statement{font-size:16px;line-height:1.75}html.cfe-re
 .cfe-copy{float:right;font:11px Arial!important;padding:2px 7px!important;margin:3px;cursor:pointer}.cfe-training-id{color:#777;font-size:12px}
 @media(max-width:650px){#cfe-root .cfe-bar{gap:10px}#cfe-root .cfe-panel{padding:10px}#cfe-root table{font-size:12px}#cfe-root td,#cfe-root th{padding:5px}}
 html.cfe-training-page #pageContent{margin-right:0!important}html.cfe-training-page #sidebar{display:none!important}
+/* A training URL must never paint the native problemset table before replacement. */
+html.cfe-training-page #pageContent>:not(#cfe-root):not(#cfe-training-page){display:none!important}
 #cfe-training-page{font:13px/1.5 Arial,"Microsoft YaHei",sans-serif;color:#333;padding-bottom:24px}#cfe-training-page h1{font-size:22px;font-weight:normal;margin:16px 0;color:#333}#cfe-training-page a,#cfe-session-sidebar a{color:#0000bb}
 #cfe-training-page .cfe-session-nav{padding:6px 0;border-bottom:1px solid #ddd}#cfe-training-page .cfe-session-controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0}
 #cfe-training-page input,#cfe-training-page select,#cfe-training-page button{font:inherit;border:1px solid #aaa;border-radius:2px;padding:4px 7px;color:#333;background:#fff}#cfe-training-page button{cursor:pointer;background:linear-gradient(#fff,#eee)}#cfe-training-page button:disabled{opacity:.55;cursor:wait}

@@ -22,17 +22,24 @@ export async function mount(){
   window.addEventListener('cfe-context-invalidated',invalidated);window.addEventListener('pagehide',stop,{once:true});cleanups.push(()=>window.removeEventListener('cfe-context-invalidated',invalidated));
   let stored=await getLocal(['preferences','account']);
   let preferences={...defaults,...stored.preferences},account=stored.account;
-  const panelMap=new Map();let active='',pickerAssets,pickerDispose,trainingNav,languageNav;
-  const translator=createTranslator(document);
+  const panelMap=new Map();let active='',pickerAssets,trainingNav,languageNav;const pickerMounts=new Map(),pickerDisposers=new Map();
+  const translator=window.__cfeEarlyTranslator||createTranslator(document);
   function tab(name,title){const p=el('div',{class:'cfe-panel roundbox',hidden:''});const b=button(title,()=>open(name).catch(e=>{notice.textContent=e.message;}));b.className='cfe-tab';b.setAttribute('aria-expanded','false');bar.append(b);panels.append(p);panelMap.set(name,{p,b});return p;}
-  async function open(name){pickerDispose?.();pickerDispose=null;active=active===name?'':name;for(const [id,{p,b}]of panelMap){p.hidden=id!==active;b.setAttribute('aria-expanded',String(id===active));}
-    if(active==='picker'||active==='history'){
-      pickerAssets ||= Promise.all(['popup.html','popup.css'].map(file=>fetch(chrome.runtime.getURL(file)).then(r=>{if(!r.ok)throw new Error('面板加载失败，请刷新网页。');return r.text();}))).catch(e=>{pickerAssets=null;throw e;});
-      const [html,css]=await pickerAssets;if(active!==name)return;
-      const p=panelMap.get(name).p;p.replaceChildren();const host=el('div'),shadow=host.attachShadow({mode:'open'}),style=el('style');style.textContent=css;
-      const wrapper=el('div');wrapper.append(document.importNode(new DOMParser().parseFromString(html,'text/html').querySelector('main'),true));shadow.append(style,wrapper);p.append(host);
-      const dispose=await mountPicker(shadow,{view:name,embedded:true});if(active!==name)dispose();else pickerDispose=dispose;
+  async function open(name){
+    active=active===name?'':name;
+    if((active==='picker'||active==='history')&&!pickerMounts.has(name)){
+      const p=panelMap.get(name).p;
+      const mounting=(async()=>{
+        pickerAssets ||= Promise.all(['popup.html','popup.css'].map(file=>fetch(chrome.runtime.getURL(file)).then(r=>{if(!r.ok)throw new Error('面板加载失败，请刷新网页。');return r.text();}))).catch(e=>{pickerAssets=null;throw e;});
+        const [html,css]=await pickerAssets;
+        const host=el('div'),shadow=host.attachShadow({mode:'open'}),style=el('style');style.textContent=css;
+        const wrapper=el('div');wrapper.append(document.importNode(new DOMParser().parseFromString(html,'text/html').querySelector('main'),true));shadow.append(style,wrapper);p.append(host);
+        const dispose=await mountPicker(shadow,{view:name,embedded:true});if(stopped)dispose();else pickerDisposers.set(name,dispose);
+      })().catch(e=>{pickerMounts.delete(name);p.replaceChildren();throw e;});pickerMounts.set(name,mounting);
     }
+    if(pickerMounts.has(name))await pickerMounts.get(name);
+    if(stopped)return;
+    for(const [id,{p,b}]of panelMap){p.hidden=id!==active;b.setAttribute('aria-expanded',String(id===active));}
   }
   tab('picker','随机跳题');tab('history','刷题记录');const prefsPanel=tab('preferences','显示设置');
   function applyPreferences(){
@@ -59,8 +66,8 @@ export async function mount(){
     languageNav.addEventListener('click',event=>{event.preventDefault();chineseCheck.checked=!preferences.chinese;chineseCheck.dispatchEvent(new Event('change'));});languageItem.append(languageNav);item.after(languageItem);
   }else bar.append(el('a',{href:libraryUrl()},'题单'));
   let scheduled=false;const observer=new MutationObserver(records=>{if(!scheduled&&records.some(r=>[...r.addedNodes].some(n=>n.nodeType===1&&(n.matches?.('.tag-box')||n.querySelector?.('.tag-box'))))){scheduled=true;setTimeout(()=>{scheduled=false;applyPreferences();},100);}});observer.observe(document.body,{childList:true,subtree:true});
-  const languageObserver=new MutationObserver(records=>{if(!preferences.chinese)return;for(const r of records){if(r.type==='characterData')translator.scan(r.target);else for(const n of r.addedNodes)if(n.nodeType===1)translator.scan(n);}});languageObserver.observe(document.body,{childList:true,characterData:true,subtree:true});
-  cleanups.push(()=>observer.disconnect(),()=>languageObserver.disconnect(),()=>pickerDispose?.());
+  const languageObserver=new MutationObserver(records=>{if(!preferences.chinese)return;for(const r of records){if(r.type==='characterData')translator.scan(r.target);else for(const n of r.addedNodes)if(n.nodeType===1)translator.scan(n);}});if(!window.__cfeEarlyTranslator)languageObserver.observe(document.body,{childList:true,characterData:true,subtree:true});
+  cleanups.push(()=>observer.disconnect(),()=>languageObserver.disconnect(),()=>{for(const dispose of pickerDisposers.values())dispose();pickerDisposers.clear();});
   for(const block of document.querySelectorAll('.sample-test .input,.sample-test .output')){
     if(block.querySelector('.input-output-copier,.cfe-copy'))continue;
     const title=block.querySelector('.title'),pre=block.querySelector('pre');if(!title||!pre)continue;

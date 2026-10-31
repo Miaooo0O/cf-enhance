@@ -2,7 +2,7 @@
   "name": "cf-enhance-companion",
   "displayName": "CF Enhance · 本地评测与提交",
   "description": "精简的本地评测：自定义输入输出、CF 样例同步、逐例或批量运行，以及网页提交反馈。",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "publisher": "Miaooo0O",
   "engines": {
     "vscode": "^1.85.0"

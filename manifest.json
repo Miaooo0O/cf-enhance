@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CF Enhance · Codeforces 增强",
-  "version": "3.3.0",
+  "version": "3.4.0",
   "minimum_chrome_version": "120",
   "description": "融入 CF 原网页的随机跳题、AC 状态、刷题记录、盲刷显示与混合自组训练工具。",
   "permissions": [
@@ -48,12 +48,22 @@
         "https://codeforces.com/*"
       ],
       "js": [
-        "homepage.js",
-        "submit-helper.js",
-        "companion-entry.js"
+        "i18n-start.js",
+        "page-start.js"
       ],
       "css": [
         "enhance.css"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://codeforces.com/*"
+      ],
+      "js": [
+        "homepage.js",
+        "submit-helper.js",
+        "companion-entry.js"
       ],
       "run_at": "document_idle"
     }

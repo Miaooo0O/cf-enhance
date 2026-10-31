@@ -21,3 +21,20 @@ test('actual C++ snapshots run custom stdin, compare outputs, support output-onl
 test('stop interrupts an owned process and output limits are bounded',async()=>{
  const controller=new AbortController();const pending=execute(process.execPath,['-e','setInterval(()=>{},1000)'],{timeout:10000,signal:controller.signal});setTimeout(()=>controller.abort(),100);const stopped=await pending;assert.equal(stopped.reason,'已停止');const oversized=await execute(process.execPath,['-e','process.stdout.write("x".repeat(2*1024*1024))']);assert.match(oversized.reason,/输出/);assert(Buffer.byteLength(oversized.stdout)<=1024*1024);
 });
+
+test('warm compilation reuses the build, invalidates code and included headers, and disposes only its owned cache',async()=>{
+ const {CompileCache}=require('./compile-cache.cjs'),cache=new CompileCache(),dir=await fs.mkdtemp(path.join(os.tmpdir(),'cf cache test '));
+ try{
+  const header=path.join(dir,'value.h');await fs.writeFile(header,'#define VALUE 7\n');
+  const snapshot={languageId:'cpp',fileName:path.join(dir,'solve.cpp'),source:'#include "value.h"\n#include <cstdio>\nint main(){printf("%d", VALUE);}'};
+  const cases=[{id:'x',input:'',expected:'7',compare:true,revision:0}];
+  const t0=performance.now(),cold=await runCases(snapshot,cases,{cache}),t1=performance.now(),warm=await runCases(snapshot,cases,{cache}),t2=performance.now();
+  assert(!cold.cached);assert.equal(cold.results[0].status,'passed');assert(warm.cached);assert.equal(warm.results[0].stdout,'7');
+  console.log(`Compilation benchmark: cold ${Math.round(t1-t0)}ms, warm ${Math.round(t2-t1)}ms`);
+  await fs.writeFile(header,'#define VALUE 9\n');const changed=await runCases(snapshot,cases,{cache});assert(!changed.cached);assert.equal(changed.results[0].stdout,'9');
+  const edited=await runCases({...snapshot,source:snapshot.source.replace('VALUE);','VALUE+1);')},cases,{cache});assert(!edited.cached);assert.equal(edited.results[0].stdout,'10');
+  const broken=await runCases({...snapshot,source:'not C++'},cases,{cache});assert(broken.compileError);assert.equal(cache.entry,null);
+  const recovered=await runCases(snapshot,cases,{cache});assert(!recovered.cached);assert.equal(recovered.results[0].stdout,'9');
+  const owned=cache.dir;await cache.dispose();await assert.rejects(fs.access(owned));assert.equal(await fs.readFile(header,'utf8'),'#define VALUE 9\n');
+ }finally{await cache.dispose();await fs.rm(dir,{recursive:true,force:true});}
+});
